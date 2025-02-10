@@ -54,6 +54,13 @@ SrvClass::SrvClass(ros::NodeHandle &nh)
   add_collision_srv_ = nh_.advertiseService(service_ns + "/add_collision",
     &SrvClass::addCollisionCallback, this);
 
+  // Lab2 Task 4
+  remove_collision_srv_ = nh_.advertiseService(service_ns + "/remove_collision",
+    &SrvClass::removeCollisionCallback, this);
+  // Lab2 Task 5
+  pick_srv_ = nh_.advertiseService(service_ns + "/pick",
+    &SrvClass::pickCallback, this);
+
   // print to the terminal
   ROS_INFO("MoveIt! services initialisation finished, ready to go");
 }
@@ -91,12 +98,61 @@ SrvClass::addCollisionCallback(moveit_tutorial::add_collision::Request &request,
   moveit_tutorial::add_collision::Response &response)
 {
   // TODO: use the addCollisionObject function
-
+  addCollisionObject(request.object_name, request.centre, request.dimensions, request.orientation);
   response.success = true;
 
   return true;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+bool
+SrvClass::removeCollisionCallback(moveit_tutorial::remove_collision::Request &request,
+  moveit_tutorial::remove_collision::Response &response)
+{
+  // TODO: use the addCollisionObject function
+  removeCollisionObject(request.object_name);
+  response.success = true;
+
+  return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+bool
+SrvClass::pickCallback(moveit_tutorial::pick::Request &request,
+  moveit_tutorial::pick::Response &response)
+{
+  // TODO: use the addCollisionObject function
+  // Set the orientation and adjust translation
+  geometry_msgs::Pose target_pos, untangle_loc;
+  target_pos.orientation.x = 0.9239;
+  target_pos.orientation.y = -0.3827;
+  target_pos.orientation.z = 0.0;
+  target_pos.orientation.w = 0.0;
+  target_pos.position.x = request.pose.position.x;
+  target_pos.position.y = request.pose.position.y;
+  target_pos.position.z = request.pose.position.z + 0.125;
+
+  untangle_loc = target_pos;
+  untangle_loc.position.x += 0.05;
+  untangle_loc.position.z = 0.4;
+
+  ROS_INFO("\n Hello %s", "World");
+
+  ROS_INFO("Hello %f", target_pos.position.x);
+  ROS_INFO("Hello %f ", target_pos.orientation.w);
+
+  bool opgrip_success = moveGripper(2.0);
+  bool untangle_success = moveArm(untangle_loc);
+  bool mvarm_success = moveArm(target_pos);
+  bool clgrip_success = moveGripper(0.0);
+
+  target_pos.position.z = target_pos.position.z + 0.4;
+  target_pos.position.z = target_pos.position.x - 0.1;
+  bool mvarm_success2 = moveArm(target_pos);
+  response.success = opgrip_success && mvarm_success && clgrip_success && mvarm_success2 && untangle_success;
+
+  return true;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 bool 
@@ -188,6 +244,30 @@ SrvClass::addCollisionObject(std::string object_name,
   // define that we will be adding this collision object 
   // Hint: what about collision_object.REMOVE?
   collision_object.operation = collision_object.ADD;
+
+  // add the collision object to the vector, then apply to planning scene
+  object_vector.push_back(collision_object);
+  planning_scene_interface_.applyCollisionObjects(object_vector);
+
+  return;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+void 
+SrvClass::removeCollisionObject(std::string object_name)
+{
+  // create a collision object message, and a vector of these messages
+  moveit_msgs::CollisionObject collision_object;
+  std::vector<moveit_msgs::CollisionObject> object_vector;
+  
+  // input header information
+  collision_object.id = object_name;
+  collision_object.header.frame_id = base_frame_;
+
+  // define that we will be adding this collision object 
+  // Hint: what about collision_object.REMOVE?
+  collision_object.operation = collision_object.REMOVE;
 
   // add the collision object to the vector, then apply to planning scene
   object_vector.push_back(collision_object);

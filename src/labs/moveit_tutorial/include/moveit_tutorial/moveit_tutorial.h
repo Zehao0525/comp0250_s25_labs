@@ -56,6 +56,8 @@
 #include <moveit_tutorial/set_arm.h>
 #include <moveit_tutorial/set_gripper.h>
 #include <moveit_tutorial/add_collision.h>
+#include <moveit_tutorial/remove_collision.h>
+#include <moveit_tutorial/pick.h>
 
 /** \brief Class advertising MoveIt! ROS services
   *
@@ -111,6 +113,35 @@ public: // set all following functions/variables to public access
   addCollisionCallback(moveit_tutorial::add_collision::Request &request,
     moveit_tutorial::add_collision::Response &response);
 
+// ==============================================================================
+// Lab 2 
+// ==============================================================================
+
+  /** \brief Service callback function for removing collision objects. 
+    *
+    * \input[in] request service request message 
+    * \input[in] response service response message
+    *  
+    * \return true if service succeeds
+    */
+  bool 
+  removeCollisionCallback(moveit_tutorial::remove_collision::Request &request,
+    moveit_tutorial::remove_collision::Response &response);
+
+  /** \brief Service callback function for removing collision objects. 
+    *
+    * \input[in] request service request message 
+    * \input[in] response service response message
+    *  
+    * \return true if service succeeds
+    */
+  bool 
+  pickCallback(moveit_tutorial::pick::Request &request,
+    moveit_tutorial::pick::Response &response);
+
+// ==============================================================================
+
+
   /** \brief MoveIt function for moving the move_group to the target position
     *
     * \input[in] target_pose pose to move the arm to
@@ -141,6 +172,16 @@ public: // set all following functions/variables to public access
   void
   addCollisionObject(std::string object_name, geometry_msgs::Point centre, 
     geometry_msgs::Vector3 dimensions, geometry_msgs::Quaternion orientation);
+
+
+  /** \brief MoveIt function for removing a cuboid collision object in RViz
+    * and the MoveIt planning scene
+    *
+    * \input[in] object_name name for the new object to be added
+    */
+  void
+  removeCollisionObject(std::string object_name);
+
   
   /* Variables */
 
@@ -160,6 +201,14 @@ public: // set all following functions/variables to public access
 
   /** \brief  Server for advertising add_collision_srv_  service. */
   ros::ServiceServer add_collision_srv_;
+
+
+  // Lab 2
+  /** \brief  Server for advertising remove_collision_srv_  service. */
+  ros::ServiceServer remove_collision_srv_;
+
+  /** \brief  Server for advertising remove_collision_srv_  service. */
+  ros::ServiceServer pick_srv_;
 
   /** \brief MoveIt interface to move groups to seperate the arm and the gripper,
     * these are defined in urdf. */

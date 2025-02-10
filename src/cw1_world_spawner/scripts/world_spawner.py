@@ -224,7 +224,7 @@ class Task(object):
     # randomly shuffle the colour and goal location orders
     goal_colours = np.random.permutation(goal_colours)
     goal_locs = np.random.permutation(BASKET_LOCATIONS)
-
+    print("goal_basket spawned at:",goal_locs)
     for i, colour in enumerate(goal_colours):
       
       basket_loc = goal_locs[i] + noise * (np.random.random() * 2 - 1)
@@ -299,12 +299,17 @@ class Task1(Task):
     """
     Spawns the objects for the task, feel free to edit
     """
-
+    
+    print()
+    print("========================")
+    print("Spawning Object")
     self.reset_task() # remove any objects currently spawned
 
     # spawn new objects for this task
     self.spawn_random_goal_baskets(num=1)
     self.spawn_box_object(name='boxobject1', xlims=T1_BOX_X_LIMS, ylims=T1_BOX_Y_LIMS)
+    print("========================")
+    print()
 
     return
 
