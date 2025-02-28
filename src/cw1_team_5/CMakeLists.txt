@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_ros
   pcl_ros
+  pcl_conversions
   cw1_world_spawner
 )
 
@@ -161,6 +162,7 @@ add_dependencies(cw1_solution_node
 target_link_libraries(cw1_solution_node
   ${catkin_LIBRARIES}
   ${PROJECT_NAME}_cw1_class_lib
+  ${PCL_LIBRARIES}
 )
 
 #############
