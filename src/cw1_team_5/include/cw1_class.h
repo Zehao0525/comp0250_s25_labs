@@ -31,10 +31,15 @@ solution is contained within the cw1_team_<your_team_number> package */
 #include <geometry_msgs/TransformStamped.h>
 #include <sensor_msgs/PointCloud2.h>
 
+// TF specific includes
+#include <tf/transform_broadcaster.h>
+#include <tf/transform_listener.h>
 
 // PCL
+#include <pcl/io/pcd_io.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/common/centroid.h>
+#include <pcl/common/common.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/voxel_grid.h>
@@ -46,9 +51,11 @@ solution is contained within the cw1_team_<your_team_number> package */
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/search/kdtree.h>
 #include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/segmentation/conditional_euclidean_clustering.h>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/segmentation/extract_clusters.h>
+
 
 
 // rosmoveit
@@ -60,6 +67,11 @@ solution is contained within the cw1_team_<your_team_number> package */
 #include "cw1_world_spawner/Task2Service.h"
 #include "cw1_world_spawner/Task3Service.h"
 
+// pcl_ros transform and its implementation
+// Apparently we need the implementation to run pcl ros with our point type
+#include <pcl_ros/transforms.h>
+#include <pcl_ros/impl/transforms.hpp>
+
 // // include any services created in this package
 // #include "cw1_team_5/example.h"
 
@@ -67,6 +79,17 @@ solution is contained within the cw1_team_<your_team_number> package */
 typedef pcl::PointXYZRGBA PointT;
 typedef pcl::PointCloud<PointT> PointC;
 typedef PointC::Ptr PointCPtr;
+
+struct DetectedObject
+{
+  std::string type, color;
+  geometry_msgs::Point position;
+  float w,l,h,r,g,b;
+};
+
+
+// Condition function 
+bool enforceColorSimilarity(const PointT& a, const PointT& b, float /*squared_dist*/);
 
 
 
@@ -92,11 +115,13 @@ public:
   t3_callback(cw1_world_spawner::Task3Service::Request &request,
     cw1_world_spawner::Task3Service::Response &response);
 
-
-
   // ===============================================================================
   // Helper Functions
   // ===============================================================================
+  
+  /// @brief reinitialize all relavent variables
+  void
+  reset_task();
 
   /// @brief function to add the ground plane into motion planning for collision avoidence.
   /// @param name_prefix std::string name of the plane added
@@ -131,6 +156,22 @@ public:
   void
   pick_place_cube(std::string obj_name, geometry_msgs::Point obj_loc, geometry_msgs::Point goal_loc);
 
+  /// @brief function to detect objects discovered by the point cloud. 
+  /// @param in_cloud_ptr PointCPtr Input pointcloud
+  /// @param detected_objects std::vector<DetectedObject> Output list of objects
+  void 
+  detect_objects(PointCPtr &in_cloud_ptr, std::vector<DetectedObject>& detected_objects);
+
+  /// @brief Given cluster representing object, find its position 
+  /// @param in_cloud_ptr PointCPtr Input pointcloud representing object
+  /// @param transformed_cloud PointCPtr Output pointcloud In target_frame
+  /// @param target_frame target frame
+  void
+  convert_ptcld_to_world (PointCPtr &in_cloud_ptr, PointCPtr &transformed_cloud, const std::string& target_frame);
+
+  /// @brief A function that will only exit after new pointcloud is recieved
+  void
+  waitForNewPointCloud();
 
   /** \brief Point Cloud CallBack function.
   * 
@@ -170,6 +211,11 @@ public:
     geometry_msgs::Vector3 dimensions, geometry_msgs::Quaternion orientation);
 
 
+  /// \brief remove all collision objects
+  void
+  remove_all_collisions();
+
+
   /** \brief Apply Voxel Grid filtering.
   * 
   * \input[in] in_cloud_ptr the input PointCloud2 pointer
@@ -177,8 +223,6 @@ public:
   */
   void
   applyVX (PointCPtr &in_cloud_ptr, PointCPtr &out_cloud_ptr);
-
-
 
 
 
@@ -220,18 +264,40 @@ public:
 
   /** \brief The input point cloud frame id. */
   std::string g_input_pc_frame_id_;
+
+  /** \brief The input point cloud time stamp. */
+  std::uint64_t g_input_pc_time_;
   
   /** \brief Voxel Grid filter. */
   pcl::VoxelGrid<PointT> g_vx;
 
   /** \brief Point Cloud (input). */
-  PointCPtr g_cloud_ptr, g_cloud_filtered, g_cloud_filtered2;
+  PointCPtr g_cloud_ptr, g_cloud_filtered, g_cloud_filtered2, g_cloud_world, g_cloud_world_tmp;
+  // If the point cloud is dirty
+  bool g_cloud_dirty;
 
   /** \brief Point Cloud (input). */
   pcl::PCLPointCloud2 g_pcl_pc;
     
   /** \brief KDTree for nearest neighborhood search. */
   pcl::search::KdTree<PointT>::Ptr g_tree_ptr;
+
+  /** -------------Additional ROS topics---------- */
+  tf::TransformListener g_listener_;
+
+  /** --------------Task 3 valirbales ------------ */
+  /** \brief ROS geometry message point. */
+  // Used for temporary storage. Would this be optimized to here by C++ anyways?
+  geometry_msgs::PointStamped g_cyl_pt_msg;
+
+  /** \brief RGB of red. */
+  double red[3] = {0.8, 0.1, 0.1};
+
+  /** \brief RGB of purple. */
+  double purple[3] = {0.8, 0.1, 0.8};
+
+  /** \brief RGB of blue. */
+  double blue[3] = {0.1, 0.1, 0.8};
 };
 
 #endif // end of include guard for CW1_CLASS_H_

@@ -40,17 +40,6 @@ cw1::cw1(ros::NodeHandle nh):
   ROS_INFO("cw1 class initialised");
 }
 
-void
-cw1::reset_task(){
-  g_cloud_ptr.reset(new PointC);             // Reset input point cloud
-  g_cloud_filtered.reset(new PointC);        // Reset filtered cloud
-  g_cloud_filtered2.reset(new PointC);       // Reset second filtered cloud
-  g_cloud_world.reset(new PointC);           // Reset world cloud
-  g_cloud_world_tmp.reset(new PointC);       // Reset temporary cloud
-  g_tree_ptr.reset(new pcl::search::KdTree<PointT>()); // Reset KdTree
-  remove_all_collisions();
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 
 bool
@@ -60,7 +49,6 @@ cw1::t1_callback(cw1_world_spawner::Task1Service::Request &request,
   /* function which should solve task 1 */
 
   ROS_INFO("The coursework solving callback for task 1 has been triggered");
-  reset_task();
   // TODO: use the addCollisionObject function
   // Set the orientation and adjust translation
 
@@ -175,7 +163,6 @@ cw1::t2_callback(cw1_world_spawner::Task2Service::Request &request,
   /* function which should solve task 2 */
 
   ROS_INFO("The coursework solving callback for task 2 has been triggered");
-  reset_task();
 
   addPlane(plane_name);
   addBaskets(basket_name, request.basket_locs);
@@ -379,19 +366,6 @@ void cw1::addCubes(std::string name_prefix, std::vector<geometry_msgs::PointStam
 }
 
 
-void
-cw1::remove_all_collisions ()
-{
-  // create a collision object message, and a vector of these messages
-  moveit_msgs::CollisionObject collision_object;
-  std::vector<moveit_msgs::CollisionObject> object_vector;
-
-  collision_object.operation = collision_object.REMOVE;
-  object_vector.push_back(collision_object);
-  planning_scene_interface_.applyCollisionObjects(object_vector);
-
-  return;
-}
 
 
 
@@ -540,7 +514,6 @@ cw1::cloudCallBack
 {
   // Extract inout point cloud info
   g_input_pc_frame_id_ = cloud_input_msg->header.frame_id;
-  g_input_pc_time_ = pcl_conversions::toPCL(cloud_input_msg->header.stamp);
     
   // Convert to PCL data type
   pcl_conversions::toPCL (*cloud_input_msg, g_pcl_pc);
@@ -548,8 +521,6 @@ cw1::cloudCallBack
 
   // Perform the filtering
   applyVX (g_cloud_ptr, g_cloud_filtered);
-  g_cloud_filtered->header.frame_id = g_input_pc_frame_id_;
-  g_cloud_filtered->header.stamp = g_input_pc_time_;
 
   g_cloud_dirty = true;
 
@@ -671,20 +642,57 @@ cw1::pick_place_cube(std::string obj_name, geometry_msgs::Point obj_loc, geometr
 
 
 // Condition function 
-bool 
-enforceColorSimilarity(const PointT& a, const PointT& b, float /*squared_dist*/)
+bool enforceColorSimilarity(const PointT& a, const PointT& b, float /*squared_dist*/)
 {
-  float bScale = std::max({b.r, b.g, b.b});
-  float aScale = std::max({a.r, a.g, a.b});
-  float tol = 0.05f * bScale * aScale;
-  // This below logic will ignore pure black clusters. (Or be undefined, but I think we wouldn't get 
-  // floating point error on *0, so it is ignore)
-  // This is the price we pay for saving the compute on handeling scale == 0 cases
-  return (std::fabs(a.r * bScale - b.r * aScale) < tol) && (std::fabs(a.g *bScale- b.g * aScale) < tol) && (std::fabs(a.b * bScale - b.b * aScale) < tol);
+float bScale = std::max({b.r, b.g, b.b});
+float aScale = std::max({a.r, a.g, a.b});
+float tol = 0.05f * bScale * aScale;
+// This below logic will ignore pure black clusters. (Or be undefined, but I think we wouldn't get 
+// floating point error on *0, so it is ignore)
+// This is the price we pay for saving the compute on handeling scale == 0 cases
+return (std::fabs(a.r * bScale - b.r * aScale) < tol) && (std::fabs(a.g *bScale- b.g * aScale) < tol) && (std::fabs(a.b * bScale - b.b * aScale) < tol);
 }
 
-void 
-cw1::waitForNewPointCloud()
+
+////////////////////////////////////////////////////////////////////////////////
+
+void
+cw1::findObjPose (PointCPtr &in_cloud_ptr, geometry_msgs::Point &obj_position)
+{
+  Eigen::Vector4f centroid_in;
+  pcl::compute3DCentroid(*in_cloud_ptr, centroid_in);
+  PointT min_pt, max_pt;
+  pcl::getMinMax3D(*in_cloud_ptr, min_pt, max_pt);
+  
+  g_cyl_pt_msg.header.frame_id = g_input_pc_frame_id_;
+  g_cyl_pt_msg.header.stamp = ros::Time (0);
+  g_cyl_pt_msg.point.x = centroid_in[0];
+  g_cyl_pt_msg.point.y = centroid_in[1];
+  g_cyl_pt_msg.point.z = min_pt.z;
+  
+  // Transform the point to new frame
+  geometry_msgs::PointStamped g_cyl_pt_msg_out;
+  try
+  {
+    g_listener_.transformPoint ("panda_link0",  // bad styling
+                                g_cyl_pt_msg,
+                                g_cyl_pt_msg_out);
+    //ROS_INFO ("trying transform...");
+  }
+  catch (tf::TransformException& ex)
+  {
+    ROS_ERROR ("Received a trasnformation exception: %s", ex.what());
+  }
+  
+  // publishPose (g_cyl_pt_msg_out);
+
+  obj_position = g_cyl_pt_msg_out.point;
+  
+  return;
+}
+
+
+void waitForNewPointCloud()
 {
   ros::Rate rate(10.0);  // 10 Hz loop rate (checks 10 times per second)
 
@@ -701,15 +709,16 @@ cw1::waitForNewPointCloud()
 }
 
 
-void cw1::convert_ptcld_to_world(PointCPtr& input_cloud, PointCPtr& transformed_cloud, const std::string& target_frame)
+void cw1::convert_ptcld_to_world(PointCPtr input_cloud, const std::string& target_frame)
 {
+  PointCPtr transformed_cloud(new PointC);
+
   // Wait for transform availability
   if (!g_listener_.waitForTransform(target_frame,
         input_cloud->header.frame_id,
         ros::Time(0), ros::Duration(3.0)))
   {
-    ROS_WARN("Transform unavailable from %s to %s",
-      input_cloud->header.frame_id.c_str(), target_frame.c_str());
+    input_cloud->header.frame_id.c_str(), target_frame.c_str());
     return;
   }
 
@@ -728,12 +737,9 @@ void cw1::convert_ptcld_to_world(PointCPtr& input_cloud, PointCPtr& transformed_
   *g_cloud_world += *transformed_cloud;
 
   // Update header
-  transformed_cloud->header.frame_id  = target_frame;
-  transformed_cloud->header.stamp = input_cloud->header.stamp;
   g_cloud_world->header.frame_id = target_frame;
   g_cloud_world->header.stamp = pcl_conversions::toPCL(ros::Time::now());
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 void cw1::detect_objects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects){
@@ -745,10 +751,8 @@ void cw1::detect_objects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& d
   // vg.setInputCloud(in_cloud_ptr);
   // vg.setLeafSize(0.005f, 0.005f, 0.005f);              // 1mm voxel size
   // vg.filter(*cloud_filtered);
-
-  waitForNewPointCloud();
-  convert_ptcld_to_world(in_cloud_ptr, cloud_filtered, "panda_link0");
-  // cloud_filtered = in_cloud_ptr;
+  cloud_filtered = in_cloud_ptr;
+  //cloud_filtered->is_dense = false;
 
   // --- 1. Cluster Extraction ---
   pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
@@ -798,24 +802,17 @@ void cw1::detect_objects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& d
     // We find the coordinates of the object
 
     // The x and y coordinates are the x and y, but z is the minimum z
-    Eigen::Vector4f cluster_centroid;
-    pcl::compute3DCentroid(*cluster, cluster_centroid);
-
-    g_cyl_pt_msg.header.frame_id = g_input_pc_frame_id_;
-    g_cyl_pt_msg.header.stamp = ros::Time (0);
-    g_cyl_pt_msg.point.x = cluster_centroid[0];
-    g_cyl_pt_msg.point.y = cluster_centroid[1];
-    g_cyl_pt_msg.point.z = cluster_centroid[2];
+    findObjPose(cluster, obj_position_tmp);
 
     float tol = 0.02f; // tolerance in meters
 
     bool isCube = (std::fabs(dims[0] - 0.04f) < tol &&
                     std::fabs(dims[1] - 0.04f) < tol && 
-                    std::fabs(max_pt.z - 0.05f) < tol);
+                    std::fabs(obj_position_tmp.z - 0.05f) < tol);
 
     bool isBasket = (std::fabs(dims[0] - 0.1f) < tol &&
                      std::fabs(dims[1] - 0.1f) < tol && 
-                     std::fabs(max_pt.z - 0.11) < tol);
+                     std::fabs(obj_position_tmp.z - 0.11) < tol);
 
 
     // obtain rgba data as the avergae rgb values
@@ -857,7 +854,166 @@ void cw1::detect_objects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& d
     cur_obj.b = b;
 
     // Assign position
-    cur_obj.position = g_cyl_pt_msg.point;
+    cur_obj.position = obj_position_tmp;
+
+    if(colorScale == 0){cur_obj.color = "other";}
+    else if (std::fabs(r / colorScale - red[0])<0.1 && std::fabs(g / colorScale - red[1])<0.1 && std::fabs(b / colorScale - red[2])<0.1)
+    {
+      cur_obj.color = "red";
+    }
+    else if (std::fabs(r / colorScale - blue[0])<0.1 && std::fabs(g / colorScale - blue[1])<0.1 && std::fabs(b / colorScale - blue[2])<0.1)
+    {
+      cur_obj.color = "blue";
+    }
+    else if (std::fabs(r / colorScale - purple[0])<0.1 && std::fabs(g / colorScale - purple[1])<0.1 && std::fabs(b / colorScale - purple[2])<0.1)
+    {
+      cur_obj.color = "purple";
+    }
+    else
+    {
+      cur_obj.color = "other";
+    }
+
+    // We find the type of the object
+    std::cout << "obj z: " << obj_position_tmp.z << std::endl;
+    if (isCube)
+    {
+      cur_obj.type = "cube";
+      std::cout << "Detected cube. Dimensions (m): " << dims << std::endl;
+    }
+    else if (isBasket)
+    {
+      cur_obj.type = "basket";
+      std::cout << "Detected basket. Dimensions (m): " << dims << std::endl;
+    }
+    else
+    {
+      cur_obj.type = "other";
+      std::cout << "Unknown object. Dimensions (m): " << dims << std::endl;
+    }
+
+    detected_objects.push_back(cur_obj);
+  }
+
+
+
+  return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+void cw1::detect_objects_bak(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects){
+
+
+  // --- 0. Use Voxels to filter the pointcloud
+  pcl::VoxelGrid<PointT> vg;
+  PointCPtr cloud_filtered(new PointC);
+  // vg.setInputCloud(in_cloud_ptr);
+  // vg.setLeafSize(0.005f, 0.005f, 0.005f);              // 1mm voxel size
+  // vg.filter(*cloud_filtered);
+  cloud_filtered = in_cloud_ptr;
+  //cloud_filtered->is_dense = false;
+
+  // --- 1. Cluster Extraction ---
+  pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
+  tree->setInputCloud(cloud_filtered);
+  // For each cluster, 
+  std::vector<pcl::PointIndices> cluster_indices;
+  pcl::ConditionalEuclideanClustering<PointT> cec(true);   // 'true' to allow cluster size filtering
+  cec.setInputCloud(cloud_filtered);
+  cec.setConditionFunction(&enforceColorSimilarity);
+  cec.setClusterTolerance(0.02f);                        // 5mm spatial cluster radius
+  cec.setMinClusterSize(100);  
+  cec.setSearchMethod(tree); 
+
+  // Cluster pointcloud
+  cec.setInputCloud(in_cloud_ptr);
+  cec.segment(cluster_indices);
+
+  // Counters for cubes and baskets
+  int cube_count = 0, basket_count = 0;
+
+
+  geometry_msgs::Point obj_position_tmp;
+  // --- 2. Process each cluster ---
+  for (const auto &indices : cluster_indices)
+  {
+    // Create a new cloud for the current cluster
+    PointCPtr cluster(new PointC);
+    for (const auto &idx : indices.indices)
+      cluster->points.push_back(cloud_filtered->points[idx]);
+    cluster->width = cluster->points.size();
+    cluster->height = 1;
+    cluster->is_dense = true;
+
+    // Compute the axis-aligned bounding box (assuming objects are well-aligned)
+    PointT min_pt, max_pt;
+    pcl::getMinMax3D(*cluster, min_pt, max_pt);
+
+    Eigen::Vector3f dims(1.0f, 2.0f, 3.0f);
+    dims[0] = std::fabs(max_pt.x - min_pt.x);
+    dims[1] = std::fabs(max_pt.y - min_pt.y);
+    dims[2] = std::fabs(max_pt.z - min_pt.z);
+
+    // --- 3. Classification based on dimensions ---
+    // Here we assume:
+    //   • A cube will have roughly equal sides of ~0.04 (with some tolerance)
+    //   • A basket (rectangular cuboid outline) will have outer dimensions ~0.1
+    // We find the coordinates of the object
+
+    // The x and y coordinates are the x and y, but z is the minimum z
+    findObjPose(cluster, obj_position_tmp);
+
+    float tol = 0.02f; // tolerance in meters
+
+    bool isCube = (std::fabs(dims[0] - 0.04f) < tol &&
+                    std::fabs(dims[1] - 0.04f) < tol && 
+                    std::fabs(obj_position_tmp.z - 0.05f) < tol);
+
+    bool isBasket = (std::fabs(dims[0] - 0.1f) < tol &&
+                     std::fabs(dims[1] - 0.1f) < tol && 
+                     std::fabs(obj_position_tmp.z - 0.11) < tol);
+
+
+    // obtain rgba data as the avergae rgb values
+    int r = 0;
+    int g = 0;
+    int b = 0;
+    // retrieve the RGB data
+    for (int j = 0; j < cluster->points.size(); j++)
+    {
+      rgba = cluster->points[j].rgba;
+      uint8_t uint8_r = (rgba >> 16) & 0x0000ff;
+      uint8_t uint8_g = (rgba >> 8) & 0x0000ff;
+      uint8_t uint8_b = (rgba)&0x0000ff;
+      uint8_t uint8_a = (rgba >> 24) & 0x000000ff;
+
+      r = r + uint8_r;
+      g = g + uint8_g;
+      b = b + uint8_b;
+    }
+
+    // take the average number of rgb of the image area
+    r = r / cluster->points.size();
+    g = g / cluster->points.size();
+    b = b / cluster->points.size();
+
+    
+    // --- 4. Data analysis
+    // We find the color of the object
+    // Use better conditions
+    DetectedObject cur_obj;
+    float colorScale = std::max({r, g, b}) / 0.8; // This will scale the Color to the GT RGB colors
+
+    // Get meta information
+    cur_obj.w = dims[0];
+    cur_obj.l = dims[1];
+    cur_obj.h = dims[2];
+    cur_obj.r = r;
+    cur_obj.g = g;
+    cur_obj.b = b;
+
+    // Assign position
+    cur_obj.position = obj_position_tmp;
 
     if(colorScale == 0){cur_obj.color = "other";}
     else if (std::fabs(r / colorScale - red[0])<0.1 && std::fabs(g / colorScale - red[1])<0.1 && std::fabs(b / colorScale - red[2])<0.1)

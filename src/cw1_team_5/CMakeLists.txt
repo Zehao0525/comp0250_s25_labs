@@ -112,7 +112,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES move_panda
- CATKIN_DEPENDS message_runtime cw1_world_spawner
+ CATKIN_DEPENDS message_runtime cw1_world_spawner pcl_ros
 #  DEPENDS system_lib
 )
 
