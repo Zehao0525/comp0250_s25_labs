@@ -750,7 +750,7 @@
 			</link>
 			<static>1</static>
 		</model>
-		<model name="object-golf-tile-9.0-8.0-new">
+		<model name="object--tile-9.0-8.0-new">
 			<pose frame="tile-frame">0.35 0.3 0.01 0 0 0</pose>
 			<link name="link_1">
 				<inertial>

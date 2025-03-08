@@ -71,53 +71,38 @@ cw1::t1_callback(cw1_world_spawner::Task1Service::Request &request,
   // We examine from model.sdf.xmacro that the tiles span from:
   // 0.2 to 0.7 in the x direction, and -0.45 to 0.45 in the y direction
   // Thickness in the z direction is 0.01
-  geometry_msgs::Point plane_pos;
-  plane_pos.x = 0.45;
-  plane_pos.y = 0;
-  plane_pos.z = 0.005;
+  addPlane(plane_name);  
+  addCube(cube_name, request.object_loc.pose.position);
+  addBasket(basket_name, request.goal_loc.point);
 
-  geometry_msgs::Vector3 plane_dim;
-  plane_dim.x = 5;
-  plane_dim.y = 9;
-  plane_dim.z = 0.03;
+  // geometry_msgs::Vector3 cube_dim;
+  // cube_dim.x = 0.06;
+  // cube_dim.y = 0.06;
+  // cube_dim.z = 0.06;
 
-  geometry_msgs::Quaternion plate_ori;
-  plate_ori.w = 1;
-  plate_ori.x = 0;
-  plate_ori.y = 0;
-  plate_ori.z = 0;
+  // geometry_msgs::Quaternion cube_ori;
+  // cube_ori.w = 1;
+  // cube_ori.x = 0;
+  // cube_ori.y = 0;
+  // cube_ori.z = 0;
 
-  addCollisionObject(plane_name,plane_pos,plane_dim,plate_ori);
-  
+  // // add the cube
+  // addCollisionObject(cube_name, request.object_loc.pose.position,cube_dim,cube_ori);
 
-  geometry_msgs::Vector3 cube_dim;
-  cube_dim.x = 0.06;
-  cube_dim.y = 0.06;
-  cube_dim.z = 0.06;
+  // // Define basket location
+  // geometry_msgs::Vector3 basket_dim;
+  // basket_dim.x = 0.12;
+  // basket_dim.y = 0.12;
+  // basket_dim.z = 0.12;
 
-  geometry_msgs::Quaternion cube_ori;
-  cube_ori.w = 1;
-  cube_ori.x = 0;
-  cube_ori.y = 0;
-  cube_ori.z = 0;
+  // geometry_msgs::Quaternion basket_ori;
+  // basket_ori.w = 1;
+  // basket_ori.x = 0;
+  // basket_ori.y = 0;
+  // basket_ori.z = 0;
 
-  // add the cube
-  addCollisionObject(cube_name, request.object_loc.pose.position,cube_dim,cube_ori);
-
-  // Define basket location
-  geometry_msgs::Vector3 basket_dim;
-  basket_dim.x = 0.12;
-  basket_dim.y = 0.12;
-  basket_dim.z = 0.12;
-
-  geometry_msgs::Quaternion basket_ori;
-  basket_ori.w = 1;
-  basket_ori.x = 0;
-  basket_ori.y = 0;
-  basket_ori.z = 0;
-
-  // add the basket
-  addCollisionObject(basket_name, request.goal_loc.point, basket_dim, basket_ori);
+  // // add the basket
+  // addCollisionObject(basket_name, request.goal_loc.point, basket_dim, basket_ori);
 
   set_constraint ();
 
@@ -142,6 +127,9 @@ cw1::t1_callback(cw1_world_spawner::Task1Service::Request &request,
   goal_pos.position.x = request.goal_loc.point.x;
   goal_pos.position.y = request.goal_loc.point.y;
   goal_pos.position.z = 0.3;  // 0.1(cup height) + 0.125(height from edn effector to bottom of cube) + 0.075(leeway)
+
+  pick_place_cube(cube_name, target_pos.position, goal_pos.position);
+  return true;
 
   // Open gripper
   bool opgrip_success = moveGripper(1);
@@ -210,7 +198,12 @@ cw1::t2_callback(cw1_world_spawner::Task2Service::Request &request,
     // Here we insert a list of 
     std::vector<DetectedObject> detected_objects;
     ROS_INFO("Detecting Object");
-    detect_objects(g_cloud_filtered, detected_objects);
+
+
+    // The whole object detction section
+    waitForNewPointCloud();
+    convert_ptcld_to_world(g_cloud_filtered, g_cloud_filtered2);
+    detect_objects(g_cloud_filtered2, detected_objects);
 
     // Find closest color
     double min_dist_sq = std::numeric_limits<double>::max();
@@ -268,6 +261,78 @@ cw1::t3_callback(cw1_world_spawner::Task3Service::Request &request,
   /* function which should solve task 3 */
 
   ROS_INFO("The coursework solving callback for task 3 has been triggered");
+  reset_task();
+  addPlane(plane_name);
+  addClarance("Clearance");
+
+
+  // Step 1: mapping the scene
+  // We will take visualizations every 0.2 m
+  geometry_msgs::Pose target;
+  target.orientation.x = 0.9239;
+  target.orientation.y = -0.3827;
+  target.orientation.z = 0;
+  target.orientation.w = 0;
+
+  // Scanning
+  for(float y = -0.35; y<=0.41; y+=0.3){
+    for(float x = 0.325; x<=0.71; x+=0.25){
+      target.position.x = x;
+      target.position.y = y;
+      target.position.z = 0.6;
+      ROS_INFO("Scanning at position: (%f, %f, %f)",
+           target.position.x,
+           target.position.y,
+           target.position.z);
+      ROS_INFO("Moving arm");
+      moveArm(target);
+  
+      // Scanning
+      waitForNewPointCloud();
+      convert_ptcld_to_world(g_cloud_filtered, g_cloud_filtered2);
+    }
+  }
+  // Scaning phase complete, removing clearance
+  removeCollisionObject("Clearance");
+
+  // Step 2: detect all the objects in the scene
+  std::vector<DetectedObject> detected_objects;
+  ROS_INFO("Detecting Object");
+  detect_objects(g_cloud_world, detected_objects);
+
+  // Step 3: find out which baskets we have, and pace cubes with the right color into the right basket
+
+  // Create a map from color to basket positions for quick lookup
+  std::unordered_map<std::string, geometry_msgs::Point> basket_map;
+
+  // Populate basket map
+  int i=0;
+  for (auto& obj : detected_objects) {
+    ROS_INFO("Object at position: (%s, %s, %f, %f, %f)",obj.type.c_str(), obj.color.c_str(),
+    obj.position.x,
+    obj.position.y,
+    obj.position.z);
+    if (obj.type == "cube" && obj.color != "other") {
+      obj.name = "cube" + std::to_string(i);
+      addCube(obj.name, obj.position);
+    }
+    if (obj.type == "basket" && obj.color != "other") {
+      obj.name = "basket" + std::to_string(i);
+      addBasket(obj.name, obj.position);
+      basket_map[obj.color] = obj.position;
+    }
+    i++;
+  }
+
+  // Main logic: place cubes into matching color baskets
+  for (auto& cube : detected_objects) {
+    if (cube.type == "cube" && cube.color != "other") {
+      auto basket_it = basket_map.find(cube.color);
+      if (basket_it != basket_map.end()) {
+        pick_place_cube(cube.name, cube.position, basket_it->second);
+      }
+    }
+  }
 
   return true;
 }
@@ -278,15 +343,19 @@ cw1::t3_callback(cw1_world_spawner::Task3Service::Request &request,
 
 void cw1::addPlane(std::string object_name)
 {
+  // 0.02 thick, 0.1 on both sides for a tile
+  // x center from 0.25 to 0.65 (0.2-0.7)
+  // y center from -0.4 to 0.4 (-0.45-0.45)
+  // z centres at 0.01
   geometry_msgs::Point plane_pos;
   plane_pos.x = 0.45;
   plane_pos.y = 0;
-  plane_pos.z = 0.005;
+  plane_pos.z = 0.01;
 
   geometry_msgs::Vector3 plane_dim;
-  plane_dim.x = 5;
-  plane_dim.y = 9;
-  plane_dim.z = 0.03;
+  plane_dim.x = 0.52;
+  plane_dim.y = 0.92;
+  plane_dim.z = 0.04;
 
   geometry_msgs::Quaternion plate_ori;
   plate_ori.w = 1;
@@ -297,6 +366,44 @@ void cw1::addPlane(std::string object_name)
   addCollisionObject(object_name,plane_pos,plane_dim,plate_ori);
 }
 
+void cw1::addClarance(std::string object_name)
+{
+  geometry_msgs::Point plane_pos;
+  plane_pos.x = 0.45;
+  plane_pos.y = 0;
+  plane_pos.z = 0.06;
+
+  geometry_msgs::Vector3 plane_dim;
+  plane_dim.x = 0.52;
+  plane_dim.y = 0.92;
+  plane_dim.z = 0.12;
+
+  geometry_msgs::Quaternion plate_ori;
+  plate_ori.w = 1;
+  plate_ori.x = 0;
+  plate_ori.y = 0;
+  plate_ori.z = 0;
+
+  addCollisionObject(object_name,plane_pos,plane_dim,plate_ori);
+}
+
+void cw1::addBasket(std::string name, geometry_msgs::Point basket_pos)
+{
+  // Define basket location
+  geometry_msgs::Vector3 basket_dim;
+  basket_dim.x = 0.12;
+  basket_dim.y = 0.12;
+  basket_dim.z = 0.12;
+
+  geometry_msgs::Quaternion basket_ori;
+  basket_ori.w = 1;
+  basket_ori.x = 0;
+  basket_ori.y = 0;
+  basket_ori.z = 0;
+
+  addCollisionObject(name,basket_pos,basket_dim,basket_ori);
+
+}
 
 void cw1::addBaskets(std::string name_prefix, std::vector<geometry_msgs::Point> basket_locs)
 {
@@ -336,6 +443,25 @@ void cw1::addBaskets(std::string name_prefix, std::vector<geometry_msgs::PointSt
     basket_locs_pts.push_back(basket_locs[i].point);
   }
   addBaskets(name_prefix,basket_locs_pts);
+}
+
+void cw1::addCube(std::string name, geometry_msgs::Point cube_loc)
+{
+
+  geometry_msgs::Vector3 cube_dimen;
+  geometry_msgs::Quaternion cube_orien;
+  geometry_msgs::Point cube_pos;
+
+  cube_dimen.x = 0.06;
+  cube_dimen.y = 0.06;
+  cube_dimen.z = 0.06;
+
+  cube_orien.w = 1;
+  cube_orien.x = 0;
+  cube_orien.y = 0;
+  cube_orien.z = 0;
+
+  addCollisionObject(name,cube_loc,cube_dimen,cube_orien);
 }
 
 void cw1::addCubes(std::string name_prefix, std::vector<geometry_msgs::Point> cube_locs)
@@ -399,27 +525,35 @@ cw1::remove_all_collisions ()
 //            Helper functions
 // =====================================================
 
-bool 
-cw1::moveArm(geometry_msgs::Pose target_pose)
+bool cw1::moveArm(geometry_msgs::Pose& target_pose)
 {
-  // setup the target pose
-  ROS_INFO("Setting pose target");
+  ROS_INFO("Setting pose target.");
   arm_group_.setPoseTarget(target_pose);
 
-  // create a movement plan for the arm
-  ROS_INFO("Attempting to plan the path");
   moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-  bool success = (arm_group_.plan(my_plan) ==
-    moveit::planning_interface::MoveItErrorCode::SUCCESS);
+  bool plan_success = false;
+  bool exec_success = false;
 
-  // google 'c++ conditional operator' to understand this line
-  ROS_INFO("Visualising plan %s", success ? "" : "FAILED");
+  int attempts = 0;
 
-  // execute the planned path
-  arm_group_.move();
-
-  return success;
+  while (!plan_success && !exec_success && attempts < 100)
+  {
+    ROS_INFO("Planning attempt %d...", attempts + 1);
+    plan_success = (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    
+    attempts++;
+    if (!plan_success){continue;}
+    // arm_group_.move()
+    auto exec_result = arm_group_.execute(my_plan);
+    exec_success = exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS;
+    if(exec_success){break;}
+  }
+  if (!plan_success || !exec_success){
+    ROS_WARN("Plan failed");
+  }
+  return true;
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -641,11 +775,12 @@ cw1::pick_place_cube(std::string obj_name, geometry_msgs::Point obj_loc, geometr
   target_pos.orientation.w = 0.0;
   target_pos.position.x = obj_loc.x;
   target_pos.position.y = obj_loc.y;
-  target_pos.position.z = obj_loc.z + 0.125; //0.125 is the tested distance for the end effector to grab the cube firmly
+  //target_pos.position.z = obj_loc.z + 0.125; //0.125 is the tested distance for the end effector to grab the cube firmly
+  target_pos.position.z = 0.03 + 0.125; //0.03 is the hard coded position of the cubes
 
   // We specify an intermediate state for the planner because it i stupid and could't find a clear path to goal
   lift_pos = target_pos;
-  lift_pos.position.z = 0.18;
+  lift_pos.position.z = 0.3;
 
   // We define the pose above the goal for he arm to move to
   goal_pos = target_pos;
@@ -656,17 +791,20 @@ cw1::pick_place_cube(std::string obj_name, geometry_msgs::Point obj_loc, geometr
   // Open gripper
   bool opgrip_success = moveGripper(1);
   // Move into object position
-  bool mvarm_success = moveArm(target_pos);
+  // Move to lifted position
+  bool mvarm_success = moveArm(lift_pos);
+
+  mvarm_success = mvarm_success && moveArm(target_pos);
   // Close gripper
   removeCollisionObject(obj_name);
   bool clgrip_success = moveGripper(0);
   
   // Move to lifted position
-  bool mvarm_success2 = moveArm(lift_pos);
+  mvarm_success = mvarm_success && moveArm(lift_pos);
   // Move to goal position
-  bool mvarm_success3 = moveArm(goal_pos);
+  mvarm_success = mvarm_success && moveArm(goal_pos);
   // Open gripper
-  bool opgrip_success2 = moveGripper(1);
+  bool opgrip_success2 = moveGripper(0.8);
 }
 
 
@@ -701,22 +839,24 @@ cw1::waitForNewPointCloud()
 }
 
 
-void cw1::convert_ptcld_to_world(PointCPtr& input_cloud, PointCPtr& transformed_cloud, const std::string& target_frame)
+void cw1::convert_ptcld_to_world(PointCPtr& input_cloud, PointCPtr& transformed_cloud)
 {
+
+  PointCPtr tmp_cloud(new PointC);
   // Wait for transform availability
-  if (!g_listener_.waitForTransform(target_frame,
+  if (!g_listener_.waitForTransform(base_frame_,
         input_cloud->header.frame_id,
         ros::Time(0), ros::Duration(3.0)))
   {
     ROS_WARN("Transform unavailable from %s to %s",
-      input_cloud->header.frame_id.c_str(), target_frame.c_str());
+      input_cloud->header.frame_id.c_str(), base_frame_.c_str());
     return;
   }
 
   // Perform the transformation
   try
   {
-    pcl_ros::transformPointCloud(target_frame, *input_cloud, *transformed_cloud, g_listener_);
+    pcl_ros::transformPointCloud(base_frame_, *input_cloud, *tmp_cloud, g_listener_);
   }
   catch (tf::TransformException &ex)
   {
@@ -724,46 +864,39 @@ void cw1::convert_ptcld_to_world(PointCPtr& input_cloud, PointCPtr& transformed_
     return;
   }
 
-  // Merge point clouds
-  *g_cloud_world += *transformed_cloud;
+  // Do a z filter to remove the ground plane
+  // Reduce memory consumption
+  pass_filter.setInputCloud(tmp_cloud);
+  pass_filter.setFilterFieldName("z");
+  pass_filter.setFilterLimits(0.015, std::numeric_limits<float>::max()); // keeps points with z ≥ 0.015
+  pass_filter.filter(*transformed_cloud);
 
   // Update header
-  transformed_cloud->header.frame_id  = target_frame;
+  transformed_cloud->header.frame_id  = base_frame_;
   transformed_cloud->header.stamp = input_cloud->header.stamp;
-  g_cloud_world->header.frame_id = target_frame;
-  g_cloud_world->header.stamp = pcl_conversions::toPCL(ros::Time::now());
-}
 
+  // Merge point clouds
+  *g_cloud_world += *transformed_cloud;
+  g_cloud_world->header.frame_id = base_frame_;
+  g_cloud_world->header.stamp = pcl_conversions::toPCL(ros::Time::now());
+} 
 
 ////////////////////////////////////////////////////////////////////////////////
 void cw1::detect_objects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects){
 
-
-  // --- 0. Use Voxels to filter the pointcloud
-  pcl::VoxelGrid<PointT> vg;
-  PointCPtr cloud_filtered(new PointC);
-  // vg.setInputCloud(in_cloud_ptr);
-  // vg.setLeafSize(0.005f, 0.005f, 0.005f);              // 1mm voxel size
-  // vg.filter(*cloud_filtered);
-
-  waitForNewPointCloud();
-  convert_ptcld_to_world(in_cloud_ptr, cloud_filtered, "panda_link0");
-  // cloud_filtered = in_cloud_ptr;
-
   // --- 1. Cluster Extraction ---
   pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
-  tree->setInputCloud(cloud_filtered);
+  tree->setInputCloud(in_cloud_ptr);
   // For each cluster, 
   std::vector<pcl::PointIndices> cluster_indices;
   pcl::ConditionalEuclideanClustering<PointT> cec(true);   // 'true' to allow cluster size filtering
-  cec.setInputCloud(cloud_filtered);
+  cec.setInputCloud(in_cloud_ptr);
   cec.setConditionFunction(&enforceColorSimilarity);
   cec.setClusterTolerance(0.02f);                        // 5mm spatial cluster radius
-  cec.setMinClusterSize(100);  
+  cec.setMinClusterSize(25);  
   cec.setSearchMethod(tree); 
 
   // Cluster pointcloud
-  cec.setInputCloud(in_cloud_ptr);
   cec.segment(cluster_indices);
 
   // Counters for cubes and baskets
@@ -777,7 +910,7 @@ void cw1::detect_objects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& d
     // Create a new cloud for the current cluster
     PointCPtr cluster(new PointC);
     for (const auto &idx : indices.indices)
-      cluster->points.push_back(cloud_filtered->points[idx]);
+      cluster->points.push_back(in_cloud_ptr->points[idx]);
     cluster->width = cluster->points.size();
     cluster->height = 1;
     cluster->is_dense = true;

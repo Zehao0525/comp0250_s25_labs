@@ -82,7 +82,7 @@ typedef PointC::Ptr PointCPtr;
 
 struct DetectedObject
 {
-  std::string type, color;
+  std::string type, color, name;
   geometry_msgs::Point position;
   float w,l,h,r,g,b;
 };
@@ -128,9 +128,16 @@ public:
   void 
   addPlane(std::string object_name);
 
+  /// @brief function to add the a collision representing all possible positions objects can spawn in
+  /// @param name_prefix std::string name of the object added
+  void 
+  addClarance(std::string object_name);
+
   /// @brief function to add the baskets into motion planning for collision avoidence. 
   /// @param name_prefix std::string prefix for the objects added (the object name will be prefix + index). 
   /// @param basket_locs std::vector<geometry_msgs::Point> location of the objects.
+  void
+  addBasket(std::string name, geometry_msgs::Point basket_pos);
   void
   addBaskets(std::string name_prefix, std::vector<geometry_msgs::Point> basket_locs);
   void 
@@ -138,7 +145,9 @@ public:
 
   /// @brief function to add the baskets into motion planning for collision avoidence. 
   /// @param name_prefix std::string prefix for the objects added (the object name will be prefix + index). 
-  /// @param basket_locs std::vector<geometry_msgs::Point> location of the objects.
+  /// @param cube_locs / cube loc std::vector<geometry_msgs::Point> location of the objects.
+  void 
+  addCube(std::string name, geometry_msgs::Point cube_loc);
   void
   addCubes(std::string name_prefix, std::vector<geometry_msgs::Point> cube_locs);
   void
@@ -167,7 +176,7 @@ public:
   /// @param transformed_cloud PointCPtr Output pointcloud In target_frame
   /// @param target_frame target frame
   void
-  convert_ptcld_to_world (PointCPtr &in_cloud_ptr, PointCPtr &transformed_cloud, const std::string& target_frame);
+  convert_ptcld_to_world (PointCPtr &in_cloud_ptr, PointCPtr &transformed_cloud);
 
   /// @brief A function that will only exit after new pointcloud is recieved
   void
@@ -188,7 +197,7 @@ public:
   /// @param target_pose geometry_msgs::Pose target pose to approach
   /// @return true
   bool 
-  moveArm(geometry_msgs::Pose target_pose);
+  moveArm(geometry_msgs::Pose& target_pose);
 
   /// @brief Movelt function to open/close gripper.
   /// @param width float the width between two fingers.
@@ -281,6 +290,9 @@ public:
     
   /** \brief KDTree for nearest neighborhood search. */
   pcl::search::KdTree<PointT>::Ptr g_tree_ptr;
+
+  /** \brief Pass through filter for pointcloud simplification. */
+  pcl::PassThrough<PointT> pass_filter;
 
   /** -------------Additional ROS topics---------- */
   tf::TransformListener g_listener_;
