@@ -855,7 +855,7 @@ void cw1::convert_ptcld_to_world(PointCPtr& input_cloud, PointCPtr& transformed_
   // Wait for transform availability
   if (!g_listener_.waitForTransform(base_frame_,
         input_cloud->header.frame_id,
-        ros::Time(0), ros::Duration(3.0)))
+        input_cloud_msg->header.stamp, ros::Duration(3.0)))
   {
     ROS_WARN("Transform unavailable from %s to %s",
       input_cloud->header.frame_id.c_str(), base_frame_.c_str());
