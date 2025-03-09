@@ -3,7 +3,7 @@ you can do whatever you want with this template code, including deleting it all
 and starting from scratch. The only requirment is to make sure your entire 
 solution is contained within the cw1_team_<your_team_number> package */
 
-#include <cw1_class.h>
+#include "cw1_class.h"
 
 int main(int argc, char **argv){
   
@@ -17,7 +17,8 @@ int main(int argc, char **argv){
   ros::Subscriber pcl_sub = 
                   nh.subscribe ("/r200/camera/depth_registered/points",
                   1,
-                  &cw1::cloudCallBack,
+                  // &cw1::cloudCallBack,
+                  &cw1::cloud_callback,
                   &cw_class);
 
   // MoveIt! requirement for non-blocking group.move()

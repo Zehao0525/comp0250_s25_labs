@@ -129,7 +129,10 @@ include_directories(
 
 # Declare a C++ library
 add_library(${PROJECT_NAME}_cw1_class_lib
-  src/cw1_class.cpp
+  # src/cw1_class.cpp
+  src/add_or_remove_functions.cpp
+  src/cw1_services.cpp
+  src/cw1_tools.cpp
 )
 
 ## Add cmake target dependencies of the library

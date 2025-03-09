@@ -13,10 +13,10 @@ solution is contained within the cw1_team_<your_team_number> package */
 #include <typeinfo>
 #include <array>
 #include <cmath>
-#include <unordered_map>
 
 // system includes
 #include <ros/ros.h>
+
 
 // ros mesgs
 #include <std_msgs/String.h>
@@ -56,6 +56,8 @@ solution is contained within the cw1_team_<your_team_number> package */
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/segmentation/extract_clusters.h>
 
+
+
 // rosmoveit
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
@@ -70,6 +72,10 @@ solution is contained within the cw1_team_<your_team_number> package */
 #include <pcl_ros/transforms.h>
 #include <pcl_ros/impl/transforms.hpp>
 
+// // include any services created in this package
+// #include "cw1_team_5/example.h"
+
+
 typedef pcl::PointXYZRGBA PointT;
 typedef pcl::PointCloud<PointT> PointC;
 typedef PointC::Ptr PointCPtr;
@@ -81,12 +87,16 @@ struct DetectedObject
   float w,l,h,r,g,b;
 };
 
+
 // Condition function 
-bool enforce_color_similarity(const PointT& a, const PointT& b, float squared_dist);
+bool enforceColorSimilarity(const PointT& a, const PointT& b, float /*squared_dist*/);
+
+
 
 class cw1
 {
 public:
+
   /* ----- class member functions ----- */
 
   // constructor
@@ -96,13 +106,13 @@ public:
   // service callbacks for tasks 1, 2, and 3
   // ===============================================================================
   bool 
-  task1_callback(cw1_world_spawner::Task1Service::Request &request,
+  t1_callback(cw1_world_spawner::Task1Service::Request &request,
     cw1_world_spawner::Task1Service::Response &response);
   bool 
-  task2_callback(cw1_world_spawner::Task2Service::Request &request,
+  t2_callback(cw1_world_spawner::Task2Service::Request &request,
     cw1_world_spawner::Task2Service::Response &response);
   bool 
-  task3_callback(cw1_world_spawner::Task3Service::Request &request,
+  t3_callback(cw1_world_spawner::Task3Service::Request &request,
     cw1_world_spawner::Task3Service::Response &response);
 
   // ===============================================================================
@@ -114,70 +124,70 @@ public:
   reset_task();
 
   /// @brief function to add the ground plane into motion planning for collision avoidence.
-  /// @param object_name std::string name of the plane added
+  /// @param name_prefix std::string name of the plane added
   void 
-  add_plane(const std::string& object_name);
+  addPlane(std::string object_name);
 
   /// @brief function to add the a collision representing all possible positions objects can spawn in
-  /// @param object_name std::string name of the object added
+  /// @param name_prefix std::string name of the object added
   void 
-  add_clarance(const std::string& object_name);
+  addClarance(std::string object_name);
 
   /// @brief function to add the baskets into motion planning for collision avoidence. 
-  /// @param name std::string prefix for the objects added. 
-  /// @param basket_pos geometry_msgs::Point location of the object.
+  /// @param name_prefix std::string prefix for the objects added (the object name will be prefix + index). 
+  /// @param basket_locs std::vector<geometry_msgs::Point> location of the objects.
   void
-  add_basket(const std::string& name, const geometry_msgs::Point& basket_pos);
+  addBasket(std::string name, geometry_msgs::Point basket_pos);
   void
-  add_baskets(const std::string& name_prefix, const std::vector<geometry_msgs::Point>& basket_locs);
+  addBaskets(std::string name_prefix, std::vector<geometry_msgs::Point> basket_locs);
   void 
-  add_baskets(const std::string& name_prefix, const std::vector<geometry_msgs::PointStamped>& basket_locs);
+  addBaskets(std::string name_prefix, std::vector<geometry_msgs::PointStamped> basket_locs);
 
-  /// @brief function to add the cubes into motion planning for collision avoidence. 
-  /// @param name std::string prefix for the objects added. 
-  /// @param cube_loc geometry_msgs::Point location of the object.
+  /// @brief function to add the baskets into motion planning for collision avoidence. 
+  /// @param name_prefix std::string prefix for the objects added (the object name will be prefix + index). 
+  /// @param cube_locs / cube loc std::vector<geometry_msgs::Point> location of the objects.
   void 
-  add_cube(const std::string& name, const geometry_msgs::Point& cube_loc);
+  addCube(std::string name, geometry_msgs::Point cube_loc);
   void
-  add_cubes(const std::string& name_prefix, const std::vector<geometry_msgs::Point>& cube_locs);
+  addCubes(std::string name_prefix, std::vector<geometry_msgs::Point> cube_locs);
   void
-  add_cubes(const std::string& name_prefix, const std::vector<geometry_msgs::PointStamped>& cube_locs);
+  addCubes(std::string name_prefix, std::vector<geometry_msgs::PointStamped> cube_locs);
 
   /// @brief function to add constraints. 
   void
-  set_constraint();
+  set_constraint ();
+
 
   /// @brief function to pick up an object and move it somewhere else. 
   /// @param obj_name std::string name of object to pick up.
   /// @param obj_loc geometry_msgs::Point the location of .
   /// @param goal_loc geometry_msgs::Point dimensions of the object.
   void
-  pick_place_cube(const std::string& obj_name, 
-                  const geometry_msgs::Point& obj_loc, 
-                  const geometry_msgs::Point& goal_loc);
+  pick_place_cube(std::string obj_name, geometry_msgs::Point obj_loc, geometry_msgs::Point goal_loc);
 
   /// @brief function to detect objects discovered by the point cloud. 
   /// @param in_cloud_ptr PointCPtr Input pointcloud
   /// @param detected_objects std::vector<DetectedObject> Output list of objects
   void 
-  detect_objects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects);
+  detect_objects(PointCPtr &in_cloud_ptr, std::vector<DetectedObject>& detected_objects);
 
   /// @brief Given cluster representing object, find its position 
   /// @param in_cloud_ptr PointCPtr Input pointcloud representing object
   /// @param transformed_cloud PointCPtr Output pointcloud In target_frame
+  /// @param target_frame target frame
   void
-  convert_ptcld_to_world(PointCPtr& in_cloud_ptr, PointCPtr& transformed_cloud);
+  convert_ptcld_to_world (PointCPtr &in_cloud_ptr, PointCPtr &transformed_cloud);
 
   /// @brief A function that will only exit after new pointcloud is recieved
   void
-  wait_for_new_point_cloud();
+  waitForNewPointCloud();
 
   /** \brief Point Cloud CallBack function.
   * 
   * \input[in] cloud_input a PointCloud2 sensor_msgs const pointer
   */
   void
-  cloud_callback(const sensor_msgs::PointCloud2ConstPtr& cloud_input_msg);
+  cloudCallBack (const sensor_msgs::PointCloud2ConstPtr& cloud_input_msg);
 
   // ===============================================================================
   // Moveit functions
@@ -187,18 +197,18 @@ public:
   /// @param target_pose geometry_msgs::Pose target pose to approach
   /// @return true
   bool 
-  move_arm(geometry_msgs::Pose& target_pose);
+  moveArm(geometry_msgs::Pose& target_pose);
 
   /// @brief Movelt function to open/close gripper.
   /// @param width float the width between two fingers.
   /// @return true
   bool 
-  move_gripper(float width);
+  moveGripper(float width);
 
   /// @brief Movelt function to remove object in motion planning.
   /// @param object_name std::string name of object to be removed.
   void
-  remove_collision_object(const std::string& object_name);
+  removeCollisionObject(std::string object_name);
 
   /// @brief Movelt function to add object into motion planning for collision avoidence. 
   /// @param object_name std::string name of object to add.
@@ -206,10 +216,8 @@ public:
   /// @param dimensions geometry_msgs::Vector3 dimensions of the object.
   /// @param orientation geometrymsgs::Quaternion orientation of the object.
   void
-  add_collision_object(const std::string& object_name, 
-                     const geometry_msgs::Point& centre, 
-                     const geometry_msgs::Vector3& dimensions, 
-                     const geometry_msgs::Quaternion& orientation);
+  addCollisionObject(std::string object_name, geometry_msgs::Point centre, 
+    geometry_msgs::Vector3 dimensions, geometry_msgs::Quaternion orientation);
 
 
   /// \brief remove all collision objects
@@ -223,29 +231,31 @@ public:
   * \input[out] out_cloud_ptr the output PointCloud2 pointer
   */
   void
-  apply_voxel_filter(PointCPtr& in_cloud_ptr, PointCPtr& out_cloud_ptr);
+  applyVX (PointCPtr &in_cloud_ptr, PointCPtr &out_cloud_ptr);
+
+
 
   /* ----- class member variables ----- */
 
-  bool debug_flag_;
+  bool debug_;
 
   /** \brief RGB data. */
-  uint32_t rgba_;
+  uint32_t rgba;
 
   /** Config for pcl filter */
-  double vg_leaf_size_;
-  int k_nn_;
+  double g_vg_leaf_sz;
+  int g_k_nn;
 
   ros::NodeHandle nh_;
-  ros::ServiceServer task1_service_;
-  ros::ServiceServer task2_service_;
-  ros::ServiceServer task3_service_;
+  ros::ServiceServer t1_service_;
+  ros::ServiceServer t2_service_;
+  ros::ServiceServer t3_service_;
   
   /** \brief Values used in the code */
   std::string base_frame_ = "panda_link0";
   double gripper_open_ = 80e-3;
   double gripper_closed_ = 0.0;
-  std::string basket_name_ = "basket", cube_name_ = "cube", plane_name_ = "plane";
+  std::string basket_name = "basket", cube_name = "cube", plane_name = "plane";
 
   /** \brief MoveIt interface to move groups to seperate the arm and the gripper,
     * these are defined in urdf. */
@@ -256,51 +266,50 @@ public:
     * (eg collision objects). */
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
 
-  moveit_msgs::Constraints constraints_;
-  moveit_msgs::JointConstraint joint_constraints_[7];
+  moveit_msgs::Constraints constraints;
+  moveit_msgs::JointConstraint joint_1, joint_2, joint_3, joint_4, joint_5, joint_6, joint_7;
   
   /** --------------PCL Variables -------------- */
 
   /** \brief The input point cloud frame id. */
-  std::string input_pc_frame_id_;
+  std::string g_input_pc_frame_id_;
 
   /** \brief The input point cloud time stamp. */
-  std::uint64_t input_pc_time_;
+  std::uint64_t g_input_pc_time_;
   
   /** \brief Voxel Grid filter. */
-  pcl::VoxelGrid<PointT> voxel_grid_;
+  pcl::VoxelGrid<PointT> g_vx;
 
   /** \brief Point Cloud (input). */
-  PointCPtr cloud_ptr_, cloud_filtered_, cloud_filtered2_, cloud_world_, cloud_world_tmp_;
-  
+  PointCPtr g_cloud_ptr, g_cloud_filtered, g_cloud_filtered2, g_cloud_world, g_cloud_world_tmp;
   // If the point cloud is dirty
-  bool cloud_dirty_flag_;
+  bool g_cloud_dirty;
 
   /** \brief Point Cloud (input). */
-  pcl::PCLPointCloud2 pcl_pc_;
+  pcl::PCLPointCloud2 g_pcl_pc;
     
   /** \brief KDTree for nearest neighborhood search. */
-  pcl::search::KdTree<PointT>::Ptr tree_ptr_;
+  pcl::search::KdTree<PointT>::Ptr g_tree_ptr;
 
   /** \brief Pass through filter for pointcloud simplification. */
-  pcl::PassThrough<PointT> pass_filter_;
+  pcl::PassThrough<PointT> pass_filter;
 
   /** -------------Additional ROS topics---------- */
-  tf::TransformListener tf_listener_;
+  tf::TransformListener g_listener_;
 
   /** --------------Task 3 valirbales ------------ */
   /** \brief ROS geometry message point. */
   // Used for temporary storage. Would this be optimized to here by C++ anyways?
-  geometry_msgs::PointStamped cylinder_point_msg_;
+  geometry_msgs::PointStamped g_cyl_pt_msg;
 
   /** \brief RGB of red. */
-  double red_color_[3] = {0.8, 0.1, 0.1};
+  double red[3] = {0.8, 0.1, 0.1};
 
   /** \brief RGB of purple. */
-  double purple_color_[3] = {0.8, 0.1, 0.8};
+  double purple[3] = {0.8, 0.1, 0.8};
 
   /** \brief RGB of blue. */
-  double blue_color_[3] = {0.1, 0.1, 0.8};
+  double blue[3] = {0.1, 0.1, 0.8};
 };
 
 #endif // end of include guard for CW1_CLASS_H_
