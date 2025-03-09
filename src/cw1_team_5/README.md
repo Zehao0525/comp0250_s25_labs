@@ -33,7 +33,7 @@ See the [LICENSE.txt](LICENSE) file for details.
 1. **Clone the repository** Clone the base comp0250 repository:
    ```bash
    cd your_desired_directory
-   git clone https://github.com/surgical-vision/comp0250_s25_labs.git
+   git clone https://github.com/surgical-vision/comp0250_s25_labs.git --recurse-submodules
    ```
 2. **Copy team coursework folder:** copy in folder into the src file
    ```bash
@@ -153,3 +153,58 @@ We do the following:
 ---
 
 This README is meant to serve as a guide to build, run, and understand the contributions behind the coursework package. For further details or troubleshooting, please refer to the inline comments within the source code or contact one of the team members.
+
+
+---
+
+## Code structure
+
+```
+————folder
+  |
+  |—— include
+  |    |—— cw1_class.h      # Header file containing class definitions and function declarations
+  |    |—— cw1_class.h.bak  # Header file backup
+  |
+  |—— src
+  |    |—— cw1_node.cpp               # Main node entry point
+  |    |—— cw1_services.cpp           # Task service callback implementations
+  |    |—— cw1_tools.cpp              # Utility tools and helper functions
+  |    |—— add_or_remove_functions.cpp # Collision object management functions
+  |    |—— cw1_class.cpp.bak            # backup file
+
+
+```
+
+### Key Function Modules
+
+#### Core Service Callbacks (cw1_services.cpp)
+- `task1_callback` - Implements Task 1: Pick and place a single cube
+- `task2_callback` - Implements Task 2: Basket color detection and recognition
+- `task3_callback` - Implements Task 3: Scene mapping and multi-object automated sorting
+
+#### Collision Object Management (add_or_remove_functions.cpp)
+- `add_plane` - Add ground plane
+- `add_clarance` - Add spatial clearance area
+- `add_basket/add_baskets` - Add single/multiple baskets to planning scene
+- `add_cube/add_cubes` - Add single/multiple cubes to planning scene
+- `add_collision_object` - Generic collision object addition function
+- `remove_collision_object` - Remove specific object from scene
+- `remove_all_collisions` - Clear all collision objects
+
+#### Motion Planning and Control (cw1_tools.cpp)
+- `move_arm` - Plan and move arm to target pose
+- `move_gripper` - Control gripper opening and closing
+- `set_constraint` - Set joint constraints for the robotic arm
+- `pick_place_cube` - Advanced pick and place functionality, integrating multiple steps
+
+#### Point Cloud Processing and Analysis (cw1_tools.cpp)
+- `apply_voxel_filter` - Apply voxel grid filtering to reduce point cloud density
+- `cloud_callback` - Process subscribed camera point cloud data
+- `convert_ptcld_to_world` - Transform point cloud to world coordinate system
+- `detect_objects` - Point cloud clustering and object recognition (color, type determination)
+- `wait_for_new_point_cloud` - Synchronous waiting for new point cloud data
+- `enforce_color_similarity` - Color similarity judgment function for clustering
+
+#### Other Helper Functions
+- `reset_task` - Reset task state and related variables
