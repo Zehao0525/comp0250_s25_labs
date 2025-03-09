@@ -83,6 +83,44 @@ Each task can be started via a ROS service call.
 
 ---
 
+## Algorithms description
+### Task 1
+A simple algorithm that:
+1. moves the arm to 30 cm above the destination, 
+2. opens gripper
+3. move to the cube location, 
+4. closes gripper, 
+5. up agian, 
+6. move to 30 cm above the basket
+7. opens gripper to drop the cube. 
+
+We made modifications to the moveArm function from Lab 2 so it will not stop until it found a successful trajectory, and successfully executing it (execution only happens after successful planning)
+
+### Task 2
+The actuator will be moved to directly above each possible baskets, then a pointcloud will be scanned and processed as follows:
+1. Transform: Point cloud will be converted to world coordinate
+2. Filter: Points with z<0.015 will be ignored (to remove the plane)
+3. (This pointcloud will also be added to a global pointcloud)
+4. Cluster: Point cloud will be clustered by their Eucledian distance and color, using a Kd tree aided clustering algorithm
+5. Detection: Based on the rgb values and size of the point cloud clusters the objects will be classified as "red", "blue", "purple" and "other", as well as "cube", "basket" and "other". This object will then be turned into an "DetectedObject" datastructure with its coordinates, color and type. 
+6. Record Color: We take the color of the object with type "basket", closest to the potential "basket" coordinate, and within certian position error bound, as the color of our target. If no such target exists we mark this spot as None.
+
+### Task 3
+We do the following:
+1. We first designate an **area** where objects can appear, it is initialized to the dimensions of the whole plane
+2. Using the functions from task 2, we move the actuator over this area to collect point clouds (which is automatically added to the global point cloud). 
+3. We then perform one pass of the object detection to find all the cubes and baskets.
+4. We build the mapping of basket location and color if not already
+5. We pick each cube to the basket with the right color (if basket exists)
+- *Since moveit has a chance on failing trajectory execution (even if the planning was successful), our tries to pick up the cbe can fail.*
+6. Therefore If we interected with a cube, we generate a new **area** which cubes might be in, and we go step 2 (5 will be skipped), to make sure that we have picked up all the cubes.
+7. If we have not interacted with a cube, the scene must be clean, and we complete our task. 
+
+## Potential Errors:
+- For Task 1, since there is a cance that moveit can fail trajectory execution, it has a tiny chance of knocking the cube out of its inital location before we try close the gripper on it, calusing the task to fail (though we have not encountered this in our tests)
+- For Task 2 and 3, there is a small chance that the objects may be misclassified due to noise. We have not encountered any such instances during our tests.
+- For Task 3, Although we have a mechanism to revisit areas where the cubes where positioned after each pick-and-place attempt, we are basing this action on the assumption that the failed trajectory will only slightly change the cube's location. If the failed trajectory execution where to move the cube too much (more than 15-20 cm in a direction where there are no other cubes), our revisit may not register this cube and terminate execution. *[We have not encountered this in our tests, in fact it was hard to even recreate the "failed trajectory execution" event. We has not been able to throughly test this particular failure recovery mechanism]*
+
 ## Task Breakdown and Team Contributions
 
 ### Task 1: Pick and Place Cube
@@ -100,7 +138,7 @@ Each task can be started via a ROS service call.
 
 ### Task 3: Scene Mapping and Automated Object Placement
 - **Description:** Scanning the scene from multiple viewpoints, building a world model, detecting objects, and automating cube placement into corresponding baskets.
-- **Estimated Total Time:** ~4 hours
+- **Estimated Total Time:** ~8 hours
 - **Team Contributions:**  
   - Zehao Wang: ~50% (Combined methods in Task 1 and 2 to complete task 3)
   - Jiaqi Yao: ~50% (refined algorithm and tackeled failure cases)
