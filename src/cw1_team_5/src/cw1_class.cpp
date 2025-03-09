@@ -277,69 +277,127 @@ cw1::t3_callback(cw1_world_spawner::Task3Service::Request &request,
   target.orientation.z = 0;
   target.orientation.w = 0;
 
-  // Scanning
-  for(float y = -0.35; y<=0.41; y+=0.3){
-    for(float x = 0.325; x<=0.71; x+=0.25){
-      target.position.x = x;
-      target.position.y = y;
-      target.position.z = 0.6;
-      ROS_INFO("Scanning at position: (%f, %f, %f)",
-           target.position.x,
-           target.position.y,
-           target.position.z);
-      ROS_INFO("Moving arm");
-      moveArm(target);
-  
-      // Scanning
-      waitForNewPointCloud();
-      convert_ptcld_to_world(g_cloud_filtered, g_cloud_filtered2);
-      // Scan again for another point cloud
-      waitForNewPointCloud();
-      convert_ptcld_to_world(g_cloud_filtered, g_cloud_filtered2);
-    }
-  }
-  // Scaning phase complete, removing clearance
-  removeCollisionObject("Clearance");
-
-  // Step 2: detect all the objects in the scene
-  std::vector<DetectedObject> detected_objects;
-  ROS_INFO("Detecting Object");
-  detect_objects(g_cloud_world, detected_objects);
-
-  // Step 3: find out which baskets we have, and pace cubes with the right color into the right basket
-
   // Create a map from color to basket positions for quick lookup
   std::unordered_map<std::string, geometry_msgs::Point> basket_map;
 
-  // Populate basket map
-  int i=0;
-  for (auto& obj : detected_objects) {
-    ROS_INFO("Object at position: (%s, %s, %f, %f, %f)",obj.type.c_str(), obj.color.c_str(),
-    obj.position.x,
-    obj.position.y,
-    obj.position.z);
-    if (obj.type == "cube" && obj.color != "other") {
-      obj.name = "cube" + std::to_string(i);
-      addCube(obj.name, obj.position);
-    }
-    if (obj.type == "basket" && obj.color != "other") {
-      obj.name = "basket" + std::to_string(i);
-      addBasket(obj.name, obj.position);
-      basket_map[obj.color] = obj.position;
-    }
-    i++;
-  }
+  // Is basket map populated
+  bool basket_map_populated = false;
+  // Are cubes possibly in scene?
+  bool cube_possible = true;
 
-  // Main logic: place cubes into matching color baskets
-  for (auto& cube : detected_objects) {
-    if (cube.type == "cube" && cube.color != "other") {
-      auto basket_it = basket_map.find(cube.color);
-      if (basket_it != basket_map.end()) {
-        pick_place_cube(cube.name, cube.position, basket_it->second);
+  // The Max and Min value of the plane
+  double max_x = 0.7;
+  double min_x = 0.2;
+  double max_y = 0.45;
+  double min_y = -0.45;
+
+  // The x and y interval the robot need to check to form complete map
+  double y_inc = 0.3;
+  double x_inc = 0.25;
+
+  // The amount of distance we think the cobe might move if the pick action fails
+  double tol = 0.05;
+
+  // We keep trying the task while there still may be cubes in scene
+  while(cube_possible){
+    g_cloud_world.reset(new PointC);
+    // Scanning
+    for(double y = std::min(max_y, min_y+y_inc/2); y<= std::max(min_y, max_y-y_inc/2)+0.001; y+=y_inc){
+      for(double x = std::min(max_x, min_x+x_inc/2); x<= std::max(min_x, max_x-x_inc/2)+0.001; x+=x_inc){
+        target.position.x = x;
+        target.position.y = y;
+        target.position.z = 0.6;
+        ROS_INFO("Scanning at position: (%f, %f, %f)",
+            target.position.x,
+            target.position.y,
+            target.position.z);
+        moveArm(target);
+    
+        // Scanning
+        waitForNewPointCloud();
+        convert_ptcld_to_world(g_cloud_filtered, g_cloud_filtered2);
+        // Scan again for another point cloud
+        waitForNewPointCloud();
+        convert_ptcld_to_world(g_cloud_filtered, g_cloud_filtered2);
       }
     }
+    // Scaning phase complete, removing clearance
+    removeCollisionObject("Clearance");
+
+    // Step 2: detect all the objects in the scene
+    std::vector<DetectedObject> detected_objects;
+    ROS_INFO("Detecting Object");
+    detect_objects(g_cloud_world, detected_objects);
+
+    // Step 3: find out which baskets we have, and pace cubes with the right color into the right basket
+    // Populate basket map when doing the first complete scene scan
+    if(!basket_map_populated){
+      int i=0;
+      for (auto& obj : detected_objects) {
+        ROS_INFO("Object at position: (%s, %s, %f, %f, %f)",obj.type.c_str(), obj.color.c_str(),
+        obj.position.x,
+        obj.position.y,
+        obj.position.z);
+        if (obj.type == "cube" && obj.color != "other") {
+          obj.name = "cube" + std::to_string(i);
+          addCube(obj.name, obj.position);
+        }
+        if (obj.type == "basket" && obj.color != "other") {
+          obj.name = "basket" + std::to_string(i);
+          addBasket(obj.name, obj.position);
+          basket_map[obj.color] = obj.position;
+        }
+        i++;
+      }
+      basket_map_populated = true;
+    }
+
+    // place cubes into matching color baskets
+    // We also record the max and min xy values of the cubes picked
+    // This gives a range of where cubes might be after potentially failed executions
+
+    // Set Max min x y to unreasonable values so it will always both be overwritten if cube exists
+    // Set cube possible to false
+    max_x, max_y = -10;
+    min_y, min_x = 10;
+    cube_possible = false;
+    for (auto& cube : detected_objects) {
+      if (cube.type == "cube" && cube.color != "other") {
+        auto basket_it = basket_map.find(cube.color);
+        if (basket_it != basket_map.end()) {
+          // Also if we didn't pick up something from within a basket
+          if(std::pow(cube.position.x - basket_it->second.x, 2) 
+          + std::pow(cube.position.y - basket_it->second.y, 2)
+          + std::pow(cube.position.z - basket_it->second.z, 2) > std::pow(0.15,2))
+          {
+            max_x = std::max(cube.position.x+tol, max_x);
+            min_x = std::min(cube.position.x-tol, min_x);
+            max_y = std::max(cube.position.y+tol, max_y);
+            min_y = std::min(cube.position.y-tol, min_y);
+            pick_place_cube(cube.name, cube.position, basket_it->second);
+
+            // If we tried to pick a cube, we might fail.
+            cube_possible = true;
+          }
+          
+        }
+      }
+    }
+    if(cube_possible){
+      ROS_INFO(" ---------------------------------------------- ");
+      ROS_INFO("Double ckecking for unsuccessful cube picks");
+      ROS_INFO("Ckecking between range: x = [%f, %f], y = [%f, %f]", min_x, max_x, min_y, max_y);
+      ROS_INFO(" ---------------------------------------------- ");
+    }
+    else{
+      ROS_INFO(" ---------------------------------------------- ");
+      ROS_INFO("Task Complete, no cubes left in the scene");
+      ROS_INFO(" ---------------------------------------------- ");
+    }
   }
 
+  // Now we scan the area between max and min x and y if we picked a cube before to make sure nothing went wrong
+  
   return true;
 }
 
