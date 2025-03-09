@@ -37,6 +37,7 @@ cw1::cw1(ros::NodeHandle nh):
   g_vg_leaf_sz = 0.01; // VoxelGrid leaf size: Better in a config file
   g_k_nn = 50; // Normals nn size: Better in a config file
 
+
   ROS_INFO("cw1 class initialised");
 }
 
@@ -49,6 +50,7 @@ cw1::reset_task(){
   g_cloud_world_tmp.reset(new PointC);       // Reset temporary cloud
   g_tree_ptr.reset(new pcl::search::KdTree<PointT>()); // Reset KdTree
   remove_all_collisions();
+  g_cloud_dirty = false;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -264,6 +266,7 @@ cw1::t3_callback(cw1_world_spawner::Task3Service::Request &request,
   reset_task();
   addPlane(plane_name);
   addClarance("Clearance");
+  set_constraint ();
 
 
   // Step 1: mapping the scene
@@ -288,6 +291,9 @@ cw1::t3_callback(cw1_world_spawner::Task3Service::Request &request,
       moveArm(target);
   
       // Scanning
+      waitForNewPointCloud();
+      convert_ptcld_to_world(g_cloud_filtered, g_cloud_filtered2);
+      // Scan again for another point cloud
       waitForNewPointCloud();
       convert_ptcld_to_world(g_cloud_filtered, g_cloud_filtered2);
     }
@@ -536,7 +542,7 @@ bool cw1::moveArm(geometry_msgs::Pose& target_pose)
 
   int attempts = 0;
 
-  while (!plan_success && !exec_success && attempts < 100)
+  while ((!plan_success || !exec_success) && attempts < 100)
   {
     ROS_INFO("Planning attempt %d...", attempts + 1);
     plan_success = (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
@@ -546,6 +552,8 @@ bool cw1::moveArm(geometry_msgs::Pose& target_pose)
     // arm_group_.move()
     auto exec_result = arm_group_.execute(my_plan);
     exec_success = exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS;
+    // We wil take time_outs, cause otherwise it will never fcking reach the goals
+    exec_success = exec_success || (exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT);
     if(exec_success){break;}
   }
   if (!plan_success || !exec_success){
@@ -788,11 +796,12 @@ cw1::pick_place_cube(std::string obj_name, geometry_msgs::Point obj_loc, geometr
   goal_pos.position.y = goal_loc.y;
   goal_pos.position.z = 0.3;  // 0.1(cup height) + 0.125(height from edn effector to bottom of cube) + 0.075(leeway)
 
-  // Open gripper
-  bool opgrip_success = moveGripper(1);
   // Move into object position
   // Move to lifted position
   bool mvarm_success = moveArm(lift_pos);
+
+  // Open gripper
+  bool opgrip_success = moveGripper(1);
 
   mvarm_success = mvarm_success && moveArm(target_pos);
   // Close gripper
@@ -852,6 +861,7 @@ void cw1::convert_ptcld_to_world(PointCPtr& input_cloud, PointCPtr& transformed_
       input_cloud->header.frame_id.c_str(), base_frame_.c_str());
     return;
   }
+  ROS_INFO("Transforming from%s to %s",input_cloud->header.frame_id.c_str(), base_frame_.c_str());
 
   // Perform the transformation
   try
