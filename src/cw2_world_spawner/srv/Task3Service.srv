@@ -1,0 +1,4 @@
+---
+int64 total_num_shapes
+int64 num_most_common_shape
+int64[] most_common_shape_vector
