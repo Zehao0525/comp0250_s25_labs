@@ -6,7 +6,7 @@
   <node 
     name="cw2_world_spawner" 
     pkg="cw2_world_spawner" 
-    type="test_coursework.py" 
+    type="world_spawner.py" 
     output="screen"
     launch-prefix="bash -c 'sleep $(arg launch_delay); $0 $@' ">
     <param name="models_dir" type="str" value="$(arg models_dir)"/>
