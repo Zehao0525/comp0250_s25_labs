@@ -1,0 +1,51 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+
+  <model name="nought_purple_20mm">
+    <link name="nought_link">
+      <pose>0 0 20e-3 1.5708 0 0</pose>
+      <inertial>
+        <mass>0.0001</mass>
+        <inertia>
+          <ixx>1e-5</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>1e-5</iyy>
+          <iyz>0</iyz>
+          <izz>1e-5</izz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry>
+          <mesh><uri>model://nought_purple_20mm/nought_20mm_40H.STL</uri></mesh>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>1.0e6</mu>
+              <mu2>1.0e6</mu2>
+            </ode>
+          </friction>
+          <contact>
+            <ode>
+              <min_depth>5e-3</min_depth>
+              <max_vel>0.0</max_vel>
+            </ode>
+          </contact>
+        </surface>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <mesh><uri>model://nought_purple_20mm/nought_20mm_40H.STL</uri></mesh>
+        </geometry>
+        <material>
+          <ambient>0.8 0.1 0.8 1</ambient>
+          <diffuse>0.8 0.1 0.8 1</diffuse>
+          <specular>0 0 0 0</specular>
+          <emissive>0 0 0 1</emissive>
+        </material>
+      </visual>
+    </link>
+  </model>
+
+</sdf>

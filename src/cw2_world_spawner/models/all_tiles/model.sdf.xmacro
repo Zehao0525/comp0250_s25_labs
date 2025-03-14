@@ -1,0 +1,102 @@
+<?xml version='1.0'?>
+<sdf version='1.6'>
+
+  <!-- 
+       This file uses a macro tool to autogenerate the final .sdf file.
+
+       The tool used is called xmacro, install it with:
+         $ pip install xmacro==1.1.2
+
+       The final .sdf file is generated with:
+         $ xmacro model.sdf.xmacro > model.sdf
+  -->
+
+  <!-- this file contains hardcoding as xmacro define blocks have contained namespaces,
+       so global parameters are impossible and instead all parameters must be passed to
+       each and every sub block. It should not be needed to change any hardcoding in
+       this file:
+
+          tile geometry is hardcoded at (0.1, 0.1, 0.02)
+          tile colour is hardcoded at (0.7, 0.7, 0.7) which is green
+          tile rows/cols are hardcoded, see bottom of file
+  -->
+
+  <xmacro_define_block name="make_tile" params="x y z i j">
+    <model name='object-golf-tile-${i}-${j}-new'>
+      <pose frame="tile-frame">${x} ${y} ${z} 0 0 0</pose>
+      <link name='link_1'>
+        <inertial>
+          <mass>0.0001</mass>
+          <inertia>
+            <ixx>1e-6</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1e-6</iyy>
+            <iyz>0</iyz>
+            <izz>1e-6</izz>
+          </inertia>
+        </inertial>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.1 0.1 0.02</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0 0.6 0 0</ambient>
+            <diffuse>0.7 0.7 0.7 1</diffuse>
+            <specular>0.01 0.01 0.01 1</specular>
+            <emissive>0 0 0 1</emissive>
+          </material>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.1 0.1 0.02</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>1</mu>
+                <mu2>1</mu2>
+              </ode>
+            </friction>
+          </surface>
+        </collision>
+      </link>
+      <static>1</static>
+    </model>
+  </xmacro_define_block>
+
+  <xmacro_define_block name="make_row" params="x i skipcentre">
+    <xmacro_block name="make_tile" i="${i}" j="0" x="${x}" y="-0.5" z="0.01"/>
+    <xmacro_block name="make_tile" i="${i}" j="1" x="${x}" y="-0.4" z="0.01"/>
+    <xmacro_block name="make_tile" i="${i}" j="2" x="${x}" y="-0.3" z="0.01"/>
+    <xmacro_block name="make_tile" i="${i}" j="3" x="${x}" y="-0.2" z="0.01" condition="${not skipcentre}"/>
+    <xmacro_block name="make_tile" i="${i}" j="4" x="${x}" y="-0.1" z="0.01" condition="${not skipcentre}"/>
+    <xmacro_block name="make_tile" i="${i}" j="5" x="${x}" y="0.0" z="0.01" condition="${not skipcentre}"/>
+    <xmacro_block name="make_tile" i="${i}" j="6" x="${x}" y="0.1" z="0.01" condition="${not skipcentre}"/>
+    <xmacro_block name="make_tile" i="${i}" j="7" x="${x}" y="0.2" z="0.01" condition="${not skipcentre}"/>
+    <xmacro_block name="make_tile" i="${i}" j="8" x="${x}" y="0.3" z="0.01"/>
+    <xmacro_block name="make_tile" i="${i}" j="9" x="${x}" y="0.4" z="0.01"/>
+    <xmacro_block name="make_tile" i="${i}" j="10" x="${x}" y="0.5" z="0.01"/>
+  </xmacro_define_block>
+
+  <model>
+ 	  <xmacro_block name="make_row" i="0" x="-0.55" skipcentre="0"/>
+    <xmacro_block name="make_row" i="1" x="-0.45" skipcentre="0"/>
+    <xmacro_block name="make_row" i="2" x="-0.35" skipcentre="0"/>
+    <xmacro_block name="make_row" i="3" x="-0.25" skipcentre="0"/>
+    <xmacro_block name="make_row" i="4" x="-0.15" skipcentre="1"/>
+    <xmacro_block name="make_row" i="5" x="-0.05" skipcentre="1"/>
+    <xmacro_block name="make_row" i="6" x="0.05" skipcentre="1"/>
+    <xmacro_block name="make_row" i="7" x="0.15" skipcentre="1"/>
+    <xmacro_block name="make_row" i="8" x="0.25" skipcentre="0"/>
+    <xmacro_block name="make_row" i="9" x="0.35" skipcentre="0"/>
+    <xmacro_block name="make_row" i="10" x="0.45" skipcentre="0"/>
+    <xmacro_block name="make_row" i="11" x="0.55" skipcentre="0"/>
+    <xmacro_block name="make_row" i="12" x="0.65" skipcentre="0"/>
+  </model>
+
+</sdf>

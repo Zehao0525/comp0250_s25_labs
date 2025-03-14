@@ -1,0 +1,120 @@
+<?xml version='1.0'?>
+<sdf version='1.6'>
+
+  <!-- basket parameters -->
+  <xmacro_define_value name="mass" value="1.0"/>
+  <xmacro_define_value name="diaginertia" value="1e-4"/>
+  <xmacro_define_value name="thickness" value="9e-3"/>
+  <xmacro_define_value name="length" value="350e-3"/>
+  <xmacro_define_value name="height" value="50e-3"/>
+  <xmacro_define_value name="colour" value="0.5 0.2 0.2"/>
+  <xmacro_define_value name="surface_friction" value="10.0"/>
+  <!-- end user defined parameters -->
+
+  <!-- 
+       This file uses a macro tool to autogenerate the final .sdf file.
+
+       The tool used is called xmacro, install it with:
+         $ pip install xmacro==1.1.2
+
+       The final .sdf file is generated with:
+         $ xmacro model.sdf.xmacro > model.sdf
+  -->
+
+  <!-- macro block to paste material properties -->
+  <xmacro_define_block name="material" params="rgb">
+    <material>
+      <emissive>0 0 0 1</emissive>
+      <ambient>${rgb} 1</ambient>
+      <diffuse>${rgb} 1</diffuse>
+      <specular>0.01 0.01 0.01 1</specular>
+    </material>
+  </xmacro_define_block>
+
+  <!-- macro block to paste friction properties -->
+  <xmacro_define_block name="friction" params="mu">
+    <surface>
+      <friction>
+        <ode>
+          <mu>${mu}</mu>
+          <mu2>${mu}</mu2>
+        </ode>
+      </friction>
+    </surface>
+  </xmacro_define_block>
+
+  <!-- macro block to paste inertial properties-->
+  <xmacro_define_block name="inertial" params="m i">
+    <inertial>
+      <mass>${m}</mass>
+      <inertia>
+        <ixx>${i}</ixx>
+        <iyy>${i}</iyy>
+        <izz>${i}</izz>
+        <ixy>0</ixy>
+        <ixz>0</ixz>
+        <iyz>0</iyz>
+      </inertia>
+    </inertial>
+  </xmacro_define_block>
+
+  <!-- macro block to paste a fixed joint to 'base'-->
+  <xmacro_define_block name="joint" params="parent child x y z">
+    <joint name="${child}_joint" type="fixed">
+      <parent>${parent}</parent>
+      <child>${child}</child>
+    </joint>
+  </xmacro_define_block>
+
+  <!-- macro block to construct a link-->
+  <xmacro_define_block name="link" params="tag x y z dim_x dim_y dim_z m i rgb mu">
+    <link name="${tag}">
+      <pose>${x} ${y} ${z} 0 0 0</pose>
+      <xmacro_block name="inertial" m="${m}" i="${i}"/>
+      <visual name="${tag}_visual">
+        <geometry>
+          <box><size>${dim_x} ${dim_y} ${dim_z}</size></box>
+        </geometry>
+        <xmacro_block name="material" rgb="${rgb}"/>
+      </visual>
+      <collision name="${tag}_collision">
+        <geometry>
+          <box><size>${dim_x} ${dim_y} ${dim_z}</size></box>
+        </geometry>
+        <xmacro_block name="friction" mu="${mu}"/>
+      </collision>
+    </link>
+    <xmacro_block name="joint" parent="base" child="${tag}" x="${x}" y="${y}"
+      z="${z}" condition="${tag != 'base'}"/>
+  </xmacro_define_block>
+
+  <!-- create the basket -->
+  <model name="basket">
+
+    <xmacro_block name="link" tag="base"
+      x="0" y="0" z="0"
+      dim_x="${length}" dim_y="${length}" dim_z="${thickness}"
+      m="${mass / 5.0}" i="${diaginertia}" rgb="${colour}" mu="${surface_friction}"/>
+
+    <xmacro_block name="link" tag="x1"
+      x="${(length / 2.0) - (thickness / 2.0)}" y="0" z="${height / 2.0}" 
+      dim_x="${thickness}" dim_y="${length}" dim_z="${height}" 
+      m="${mass / 5.0}" i="${diaginertia}" rgb="${colour}" mu="${surface_friction}"/>
+
+    <xmacro_block name="link" tag="x2"
+      x="${-(length / 2.0) + (thickness / 2.0)}" y="0" z="${height / 2.0}" 
+      dim_x="${thickness}" dim_y="${length}" dim_z="${height}" 
+      m="${mass / 5.0}" i="${diaginertia}" rgb="${colour}" mu="${surface_friction}"/>
+
+    <xmacro_block name="link" tag="y1"
+      y="${(length / 2.0) - (thickness / 2.0)}" x="0" z="${height / 2.0}" 
+      dim_y="${thickness}" dim_x="${length}" dim_z="${height}" 
+      m="${mass / 5.0}" i="${diaginertia}" rgb="${colour}" mu="${surface_friction}"/>
+
+    <xmacro_block name="link" tag="y2"
+      y="${-(length / 2.0) + (thickness / 2.0)}" x="0" z="${height / 2.0}" 
+      dim_y="${thickness}" dim_x="${length}" dim_z="${height}" 
+      m="${mass / 5.0}" i="${diaginertia}" rgb="${colour}" mu="${surface_friction}"/>
+
+  </model>
+</sdf>
