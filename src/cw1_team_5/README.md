@@ -114,7 +114,12 @@ We do the following:
 5. We pick each cube to the basket with the right color (if basket exists)
 - *Since moveit has a chance on failing trajectory execution (even if the planning was successful), our tries to pick up the cbe can fail.*
 6. Therefore If we interected with a cube, we generate a new **area** which cubes might be in, and we go step 2 (5 will be skipped), to make sure that we have picked up all the cubes.
-7. If we have not interacted with a cube, the scene must be clean, and we complete our task. 
+7. If we have not interacted with a cube, the scene must be clean, and we complete our task.
+
+#### Note on particular design choices and possible tweeks
+Our particular implementation takes a relativly safe strategy, we spent considerable time scanning the scene. We can easily increase task execution speed at the cost of some robustness, and ease of task modification (i.e. if we change the dimensions of the objects/baskets of interst). 
+- We have decided that for step 2., we will scan positions with intervals 0.3m in y direction, 0.25m in x direction (one pointcloud taken every such interval). This is relativly slow, however it guarentees the quality of the pointcloud taken. We can possibly improve the speed of our solution if we increase the height of the actuator when taking the pointcloud and take less pointclouds in general. 
+- Pointclouds are taken in stationary positions because the camera pointcloud and the TF pointcloud are Asynchronous (or rather we have no synchronisation guarentees).  If we had synchronized TF and point cloud data, we could scan the scene continuously and merge point clouds dynamically. Alternatively, we could assume synchronization, but this would introduce sensor noise, potentially compromising data accuracy.
 
 ## Potential Errors:
 - For Task 1, since there is a cance that moveit can fail trajectory execution, it has a tiny chance of knocking the cube out of its inital location before we try close the gripper on it, calusing the task to fail (though we have not encountered this in our tests)

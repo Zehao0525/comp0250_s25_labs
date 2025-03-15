@@ -55,9 +55,9 @@ void cw1::add_basket(const std::string& name, const geometry_msgs::Point& basket
 {
   // Define basket location
   geometry_msgs::Vector3 basket_dim;
-  basket_dim.x = 0.12;
-  basket_dim.y = 0.12;
-  basket_dim.z = 0.12;
+  basket_dim.x = 0.16;
+  basket_dim.y = 0.16;
+  basket_dim.z = 0.16;
 
   geometry_msgs::Quaternion basket_ori;
   basket_ori.w = 1.0;
@@ -78,9 +78,9 @@ void cw1::add_baskets(const std::string& name_prefix,
 
   // Define basket location
   geometry_msgs::Vector3 basket_dim;
-  basket_dim.x = 0.12;
-  basket_dim.y = 0.12;
-  basket_dim.z = 0.12;
+  basket_dim.x = 0.16;
+  basket_dim.y = 0.16;
+  basket_dim.z = 0.16;
 
   geometry_msgs::Quaternion basket_ori;
   basket_ori.w = 1.0;
