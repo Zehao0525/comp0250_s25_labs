@@ -162,7 +162,7 @@ add_dependencies(cw2_solution_node
 target_link_libraries(cw2_solution_node
   ${catkin_LIBRARIES}
   ${PROJECT_NAME}_cw2_class_lib
-  ${PCL_INCLUDE_DIRS}
+  ${PCL_LIBRARIES}
 )
 
 #############

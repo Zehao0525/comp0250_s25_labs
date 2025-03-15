@@ -11,3 +11,9 @@ logs
 Recorded-Can.bag
 
 log/
+
+
+# python cache files in all recurse directories
+**/__pycache__/
+# python cache files in all recurse directories
+**/*.pyc
