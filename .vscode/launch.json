@@ -1,0 +1,92 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ROS Noetic Debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/devel/.private/cw2_team_5/lib/cw2_team_5/cw2_solution_node",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/devel/.private/cw2_team_5/lib:${env:LD_LIBRARY_PATH}"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable Pretty Printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "catkin_build_debug",
+            "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "Test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/devel/.private/cw2_team_5/lib/cw2_team_5/PCL_test",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/devel/.private/cw2_team_5/lib:${env:LD_LIBRARY_PATH}"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable Pretty Printing",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "catkin_build_debug",
+            "miDebuggerPath": "/usr/bin/gdb"
+        }
+    ]
+}
+// {
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "name": "Debug cw2_solution_node",
+//             "type": "cppdbg",
+//             "request": "launch",
+//             "program": "${workspaceFolder}/devel/.private/cw2_team_5/lib/cw2_team_5/cw2_solution_node",
+//             "args": [],
+//             "stopAtEntry": false,
+//             "cwd": "${workspaceFolder}",
+//             "environment": [
+//                 {
+//                     "name": "ROS_MASTER_URI",
+//                     "value": "http://localhost:11311"
+//                 },
+//                 {
+//                     "name": "ROS_PACKAGE_PATH",
+//                     "value": "${workspaceFolder}/src:${workspaceFolder}/devel/lib"
+//                 }
+//             ],
+//             "externalConsole": false,
+//             "MIMode": "gdb",
+//             "setupCommands": [
+//                 {
+//                     "description": "Enable Pretty Printing",
+//                     "text": "-enable-pretty-printing",
+//                     "ignoreFailures": true
+//                 }
+//             ],
+//             "preLaunchTask": "catkin_build_debug",
+//             "miDebuggerPath": "/usr/bin/gdb"
+//         }
+//     ]
+// }

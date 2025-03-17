@@ -3,7 +3,7 @@ you can do whatever you want with this template code, including deleting it all
 and starting from scratch. The only requirment is to make sure your entire 
 solution is contained within the cw2_team_<your_team_number> package */
 
-#include <cw2_class.h> // change to your team name here!
+#include "cw2_class.h" // change to your team name here!
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -12,6 +12,7 @@ cw2::cw2(ros::NodeHandle nh)
   /* class constructor */
 
   nh_ = nh;
+  publish_cloud_ = false;
 
   // advertise solutions for coursework tasks
   t1_service_  = nh_.advertiseService("/task1_start", 
@@ -81,8 +82,72 @@ cw2::t2_callback(cw2_world_spawner::Task2Service::Request &request,
   cw2_world_spawner::Task2Service::Response &response)
 {
   /* function which should solve task 2 */
+  set_constraint();
 
+  // decoder
+  std::vector<geometry_msgs::Point> ref_object_points;
   ROS_INFO("The coursework solving callback for task 2 has been triggered");
+
+  for (const auto& point : request.ref_object_points) {
+    ROS_INFO("Reference Object Point: [x: %f, y: %f, z: %f]", point.point.x, point.point.y, point.point.z);
+    ref_object_points.push_back(point.point);
+  }
+
+  std::vector<DetectedObject> detected_objects;
+  for (const auto& point : request.ref_object_points) {
+    geometry_msgs::PointStamped reference_point = point;
+
+    Init_Pose target_pose;
+    target_pose.position = reference_point.point;
+    target_pose.position.z = 0.5;
+    bool mvstate = move_arm(target_pose);
+    ROS_INFO("Move state: %d", mvstate);
+  
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr PCL_cloud = convertToPCL(latest_cloud, tf_listener_);
+  
+    ///save the point cloud to a file
+    // pcl::io::savePCDFileASCII("mystery_point.pcd", *PCL_cloud);
+  
+    DetectedObject detected_object;
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr obj_cloud_ptr;
+    detect_objects(PCL_cloud, detected_object, obj_cloud_ptr);
+    detected_objects.push_back(detected_object);
+  }
+
+
+
+
+  
+  geometry_msgs::PointStamped mystery_point = request.mystery_object_point;
+  // end decoder
+
+
+  Init_Pose target_pose;
+  target_pose.position = mystery_point.point;
+  target_pose.position.z = 0.5;
+  bool mvstate = move_arm(target_pose);
+  ROS_INFO("Move state: %d", mvstate);
+
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr PCL_cloud = convertToPCL(latest_cloud, tf_listener_);
+
+  ///save the point cloud to a file
+  // pcl::io::savePCDFileASCII("mystery_point.pcd", *PCL_cloud);
+
+  DetectedObject detected_object;
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr obj_cloud_ptr;
+  detect_objects(PCL_cloud, detected_object, obj_cloud_ptr);
+
+  size_t match_idx = 0;
+  // Match the mystery object to the reference object
+  for (size_t idx = 0; idx < detected_objects.size(); ++idx) {
+    if (detected_object.type == detected_objects[idx].type) {
+        ROS_INFO("Matched object at index: %zu", idx);
+        match_idx = idx;
+        break;
+    }
+}
+
+  response.mystery_object_num = match_idx;
 
   return true;
 }
@@ -96,14 +161,160 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
   /* function which should solve task 3 */
 
   ROS_INFO("The coursework solving callback for task 3 has been triggered");
+  // reset_arm();
+  set_constraint();
+
+
+  combined_cloud.reset(new pcl::PointCloud<pcl::PointXYZRGBA>);
+
+  float TOL = 0.2;
+  float PLATFORM_X = 1.3 + TOL;
+  float PLATFORM_Y = 1.1;
+
+
+  for (float i = 0.1; i < PLATFORM_X; i += 0.3) {
+    for (float j = 0.1; j < PLATFORM_Y; j += 0.3) {
+      
+      geometry_msgs::Point goal_point;
+      goal_point.x = -0.5 * PLATFORM_X + i;
+      goal_point.y = -0.5 * PLATFORM_Y + j; // half of the platform size
+      goal_point.z = 0.5;
+
+      if((goal_point.x < 0.2 && goal_point.x > -0.2)&&(goal_point.y < 0.25 && goal_point.y > -0.25)){
+        continue;
+      }
+
+      Init_Pose target_pose;
+      target_pose.position = goal_point;
+      // target_pose.position.z = 0.5;
+      bool mvstate = move_arm(target_pose);
+      ROS_INFO("Move to : %f, %f", goal_point.x, goal_point.y);
+
+      
+      pcl::PointCloud<pcl::PointXYZRGBA>::Ptr PCL_cloud = convertToPCL(latest_cloud, tf_listener_, "world");
+
+      pcl::PointCloud<pcl::PointXYZRGBA>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+      pcl::fromROSMsg(*latest_cloud, *pcl_cloud);
+      pcl::io::savePCDFileASCII("test", *pcl_cloud);
+
+      // pcl::io::savePCDFileASCII("test", *latest_cloud);
+
+      
+      if (combined_cloud == nullptr) {
+          combined_cloud = PCL_cloud;
+      } else {
+          *combined_cloud += *PCL_cloud;
+      }
+
+      ROS_INFO("Cloud size: %zu", combined_cloud->points.size());
+    }
+  }
+
+  ROS_INFO("Total cloud size: %zu", combined_cloud->points.size());
+  std::string pcd_filename1 = "task3_scan_result1.pcd";
+  // pcl::io::savePCDFile(pcd_filename1, *combined_cloud);
+  pcl::io::savePCDFileASCII(pcd_filename1, *combined_cloud);
+  ROS_INFO("Point cloud saved to %s", pcd_filename1.c_str());
+  
+
+
+  // 1. 点云下采样 - 使用VoxelGrid滤波器减少点数量
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGBA>);
+  pcl::VoxelGrid<pcl::PointXYZRGBA> vg;
+  vg.setInputCloud(combined_cloud);
+  vg.setLeafSize(0.002f, 0.002f, 0.002f); // 5mm体素大小
+  vg.filter(*cloud_filtered);
+  ROS_INFO("Cloud size after voxel grid filtering: %zu", cloud_filtered->points.size());
+  
+  // // 2. 去除离群点 - 使用Statistical Outlier Removal
+  // pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered_2(new pcl::PointCloud<pcl::PointXYZRGBA>);
+  // pcl::StatisticalOutlierRemoval<pcl::PointXYZRGBA> sor;
+  // sor.setInputCloud(cloud_filtered);
+  // sor.setMeanK(50);       // 平均计算的邻居数量
+  // sor.setStddevMulThresh(1.0); // 标准差的乘数阈值
+  // sor.filter(*cloud_filtered_2);
+  // ROS_INFO("Cloud size after outlier removal: %zu", cloud_filtered_2->points.size());
+  
+  // // 3. 应用PassThrough滤波器，只保留z轴在一定范围内的点（例如，去除桌面和过高的点）
+  // pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered_3(new pcl::PointCloud<pcl::PointXYZRGBA>);
+  // pcl::PassThrough<pcl::PointXYZRGBA> pass;
+  // pass.setInputCloud(cloud_filtered_2);
+  // pass.setFilterFieldName("z");
+  // pass.setFilterLimits(0.02, 0.45); // 保留z轴在1cm到30cm之间的点
+  // pass.filter(*cloud_filtered_3);
+  // ROS_INFO("Cloud size after pass through filtering: %zu", cloud_filtered_3->points.size());
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered_3 = cloud_filtered;
+
+  // 4. 保存最终的点云为PCD文件
+  std::string pcd_filename = "task3_scan_result.pcd";
+  pcl::io::savePCDFileASCII(pcd_filename, *cloud_filtered_3);
+  ROS_INFO("Point cloud saved to %s", pcd_filename.c_str());
+  
+  std::vector<DetectedObject> detected_objects;
+  detect_objects(cloud_filtered_3, detected_objects);
+  ROS_INFO("====================================  Detected Objects  ====================================");
+  for (const auto& obj : detected_objects) {
+    ROS_INFO("Detected object: %s", obj.type.c_str());
+    ROS_INFO("Position: [x: %f, y: %f, z: %f]", obj.position.x, obj.position.y, obj.position.z);
+    ROS_INFO("Color: [r: %f, g: %f, b: %f]", obj.r, obj.g, obj.b);
+  }
+
+
+
+
+
+
+
+  ///response
+  response.total_num_shapes = detected_objects.size() - 1; // exclude the basket
+  DetectedObject picked_object, candidate_cross, candidate_nought, candidate_basket;
+  int cross_count = 0;
+  int nought_count = 0;
+  for (const auto& obj : detected_objects) {
+    if (obj.type == "cross") {
+      cross_count = cross_count + 1;
+      candidate_cross = obj;
+    } else if (obj.type == "nought") {
+      nought_count = nought_count + 1;
+      candidate_nought = obj;
+    }
+    else if (obj.type == "basket") {
+      candidate_basket = obj;
+    }
+  }
+
+  if (cross_count > nought_count) {
+    response.num_most_common_shape = cross_count;
+    ROS_INFO("Most common shape: cross");
+    ROS_INFO("Cross count: %d", cross_count);
+    picked_object = candidate_cross;
+  } else if (cross_count == nought_count) {
+    response.num_most_common_shape = 0;
+    ROS_INFO("Most common shape: same");
+    ROS_INFO("Cross count: %d", cross_count);
+    picked_object = candidate_cross;
+  }
+  else {
+    response.num_most_common_shape = nought_count;
+    ROS_INFO("Most common shape: nought");
+    ROS_INFO("Nought count: %d", nought_count);
+    picked_object = candidate_nought;
+  }
+  //// excute the pick and place
+
+  if (picked_object.type == "cross") { picked_object.position.x += 0.05; }
+  else if (picked_object.type == "nought") { picked_object.position.y += 0.08; }
+
+
+  pick_and_place(picked_object.type, picked_object.position, candidate_basket.position); 
+
+
+  ROS_INFO("Task 3 complete");
 
   return true;
 }
 
-void cw2::point_cloud_callback(const sensor_msgs::PointCloud2ConstPtr& cloud_input_msg) {
-  latest_cloud = cloud_input_msg;
-  
-}
+
 
 bool cw2::move_arm(geometry_msgs::Pose& target_pose) {
   ROS_INFO("Setting pose target.");
@@ -115,7 +326,7 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose) {
   bool exec_success = false;
 
   int attempts = 0;
-  const int max_attempts = 100;
+  const int max_attempts = 10;
 
   while ((!plan_success || !exec_success) && attempts < max_attempts) {
     ROS_INFO("Planning attempt %d...", attempts + 1);
@@ -123,6 +334,10 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose) {
     
     attempts++;
     if (!plan_success) {
+      ROS_INFO("Execution attempt %d failed", attempts);
+      geometry_msgs::Pose temporary_pose = arm_group_.getCurrentPose().pose;
+      temporary_pose.position.z -= 0.05;
+      move_arm(temporary_pose);
       continue;
     }
     
@@ -134,6 +349,8 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose) {
     if(exec_success) {
       break;
     }
+
+
   }
   
   if (!plan_success || !exec_success) {
@@ -143,30 +360,6 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose) {
   return true;
 }
 
-pcl::PointCloud<pcl::PointXYZ>::Ptr cw2::convertToPCL(sensor_msgs::PointCloud2ConstPtr cloud_msg) {
-  pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-  pcl::fromROSMsg(*cloud_msg, *pcl_cloud);
-
-  // Transform the point cloud to the desired frame
-  pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-  try {
-    tf_listener_.waitForTransform("world", cloud_msg->header.frame_id, ros::Time(0), ros::Duration(3.0));
-    pcl_ros::transformPointCloud("world", *pcl_cloud, *transformed_cloud, tf_listener_);
-  } catch (tf::TransformException &ex) {
-    ROS_ERROR("Transform error: %s", ex.what());
-    return pcl_cloud; // Return the original cloud if transform fails
-  }
-
-  return transformed_cloud;
-}
-
-void cw2::publishPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
-  sensor_msgs::PointCloud2 output;
-  pcl::toROSMsg(*cloud, output);
-  output.header.frame_id = "world";
-  point_cloud_pub_test_.publish(output);
-  ROS_INFO("Published point cloud");
-}
 
 
 void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Point& obj_loc, const geometry_msgs::Point& goal_loc) {

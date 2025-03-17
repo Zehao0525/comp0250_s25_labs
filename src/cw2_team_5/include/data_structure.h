@@ -20,4 +20,12 @@ public:
 
 };
 
+
+struct DetectedObject
+{
+  std::string type, color, name;
+  geometry_msgs::Point position;
+  float w,l,h,r,g,b;
+};
+
 #endif // end of include guard for DATA_STRUCTURE_H_

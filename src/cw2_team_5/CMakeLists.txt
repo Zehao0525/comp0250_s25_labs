@@ -130,6 +130,8 @@ include_directories(
 # Declare a C++ library
 add_library(${PROJECT_NAME}_cw2_class_lib
   src/cw2_class.cpp
+  src/pcl_tools.cpp
+  src/scan_and_generate.cpp
 )
 
 ## Add cmake target dependencies of the library
@@ -145,6 +147,8 @@ add_dependencies(${PROJECT_NAME}_cw2_class_lib
 # The recommended prefix ensures that target names across packages don't collide
 add_executable(cw2_solution_node src/cw2_node.cpp)
 
+add_executable(PCL_test src/PCL_test.cpp)
+
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -158,8 +162,17 @@ add_dependencies(cw2_solution_node
   ${catkin_EXPORTED_TARGETS}
 )
 
+add_dependencies(PCL_test
+  ${${PROJECT_NAME}_EXPORTED_TARGETS} 
+  ${catkin_EXPORTED_TARGETS}
+)
 # Specify libraries to link a library or executable target against
 target_link_libraries(cw2_solution_node
+  ${catkin_LIBRARIES}
+  ${PROJECT_NAME}_cw2_class_lib
+  ${PCL_LIBRARIES}
+)
+target_link_libraries(PCL_test
   ${catkin_LIBRARIES}
   ${PROJECT_NAME}_cw2_class_lib
   ${PCL_LIBRARIES}

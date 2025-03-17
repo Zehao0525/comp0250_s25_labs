@@ -24,6 +24,10 @@ solution is contained within the cw2_team_<your_team_number> package */
 #include <array>
 #include <cmath>
 #include <unordered_map>
+#include <thread>
+#include <mutex>
+#include <future>
+
 
 // system includes
 #include <ros/ros.h>
@@ -65,6 +69,10 @@ solution is contained within the cw2_team_<your_team_number> package */
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/segmentation/extract_clusters.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/passthrough.h>
+#include <pcl/io/pcd_io.h>
 
 // rosmoveit
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -79,6 +87,7 @@ solution is contained within the cw2_team_<your_team_number> package */
 // #include "cw2_team_x/example.h"
 
 #include "data_structure.h"
+#include <Eigen/Dense>
 
 class cw2
 {
@@ -101,6 +110,8 @@ public:
     cw2_world_spawner::Task3Service::Response &response);
 
   void point_cloud_callback(const sensor_msgs::PointCloud2ConstPtr& cloud_input_msg);
+  void publishPointCloudTimerCallback(const ros::TimerEvent& event);
+
   /* ----- class member variables ----- */
 
   ros::NodeHandle nh_;
@@ -109,9 +120,23 @@ public:
   ros::ServiceServer t3_service_;
 
   ros::Subscriber point_cloud_sub_;
+  bool publish_cloud_;
 
   ros::Publisher point_cloud_pub_test_;
-  void publishPointCloud(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud);
+  ros::Timer point_cloud_timer_;
+  void publishPointCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr pcl_cloud_;
+
+  void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, DetectedObject detected_objects, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& obj_cloud_ptr) ;
+  void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects);
+
+  void subtractPointCloud(
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_main,
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_to_remove,
+    double distance_threshold = 0.01);
+
+
+  static bool enforce_color_similarity(const pcl::PointXYZRGBA& a, const pcl::PointXYZRGBA& b, float /*squared_dist*/) ;
 
   moveit::planning_interface::MoveGroupInterface arm_group_{"panda_arm"};
   moveit::planning_interface::MoveGroupInterface hand_group_{"hand"};
@@ -121,7 +146,10 @@ public:
   bool move_arm(geometry_msgs::Pose& target_pose);
   
   pcl::PCLPointCloud2 pcl_pc_;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr convertToPCL(sensor_msgs::PointCloud2ConstPtr cloud_msg);
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr convertToPCL(
+    sensor_msgs::PointCloud2ConstPtr cloud_msg, 
+    tf::TransformListener& tf_listener, 
+    const std::string& target_frame = "world");
 
   tf::TransformListener tf_listener_;
 
@@ -144,6 +172,29 @@ public:
   void pick_and_place(const std::string& obj_name, 
     const geometry_msgs::Point& obj_loc, 
     const geometry_msgs::Point& goal_loc) ;
+
+    void reset_arm();
+
+  /////////////////
+  // Temporary
+  /////////////////
+  // geometry_msgs::PointStamped cylinder_point_msg_;
+  
+    /** \brief RGB of red. */
+    double red_color_[3] = {0.8, 0.1, 0.1};
+
+    /** \brief RGB of purple. */
+    double purple_color_[3] = {0.8, 0.1, 0.8};
+  
+    /** \brief RGB of blue. */
+    double blue_color_[3] = {0.1, 0.1, 0.8};
+  // std::string input_pc_frame_id_;
+
+
+  std::mutex cloud_mutex;
+  void merge_clouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr new_cloud);
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr combined_cloud;
+
 };
 
 #endif // end of include guard for cw2_CLASS_H_
