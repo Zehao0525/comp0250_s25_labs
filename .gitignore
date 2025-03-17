@@ -17,3 +17,4 @@ log/
 **/__pycache__/
 # python cache files in all recurse directories
 **/*.pyc
+**/*.pcd
