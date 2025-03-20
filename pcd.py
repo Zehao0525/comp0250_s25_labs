@@ -26,16 +26,31 @@ def visualize_pcd_with_axes(pcd_file):
     min_bound = bbox.get_min_bound()  # 最小坐标 (x_min, y_min, z_min)
     max_bound = bbox.get_max_bound()  # 最大坐标 (x_max, y_max, z_max)
     size = max_bound - min_bound  # 计算尺寸
+    center = bbox.get_center()  # 计算中心点坐标
 
     print(f"点云边界框尺寸: {size} (单位: m)")
     print(f"最小坐标: {min_bound}")
     print(f"最大坐标: {max_bound}")
+    print(f"中心点坐标: {center}")
 
     # 创建坐标系，长度为 0.1m
     coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
 
     # 创建可视化窗口
-    o3d.visualization.draw_geometries([pcd, bbox, coord_frame], window_name="PCD Viewer with Axes")
+    vis = o3d.visualization.VisualizerWithEditing()
+    vis.create_window(window_name="PCD Viewer with Axes")
+    vis.add_geometry(pcd)
+    vis.add_geometry(bbox)
+    vis.add_geometry(coord_frame)
+    vis.run()
+    vis.destroy_window()
+
+    # 获取用户选择的点
+    picked_points = vis.get_picked_points()
+    if picked_points:
+        for idx in picked_points:
+            point = pcd.points[idx]
+            print(f"选中的点索引: {idx}, 坐标: {point}")
 
 if __name__ == "__main__":
     # parser = argparse.ArgumentParser(description="PCD 可视化工具（带坐标系和尺寸信息）")
@@ -45,5 +60,7 @@ if __name__ == "__main__":
 
     # visualize_pcd_with_axes(args.pcd_file)
 
-    pcd_file = "task3_scan_result.pcd"
+    pcd_file = "ought_shape.pcd"
+    pcd_file = "2.pcd"
+
     visualize_pcd_with_axes(pcd_file)

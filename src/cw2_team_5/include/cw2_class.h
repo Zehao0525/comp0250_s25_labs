@@ -87,7 +87,9 @@ solution is contained within the cw2_team_<your_team_number> package */
 // #include "cw2_team_x/example.h"
 
 #include "data_structure.h"
-#include <Eigen/Dense>
+#include "detect_object.h"
+#include "shape_generator.h"
+
 
 class cw2
 {
@@ -127,23 +129,14 @@ public:
   void publishPointCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr pcl_cloud_;
 
-  void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, DetectedObject detected_objects, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& obj_cloud_ptr) ;
-  void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects);
 
-  void subtractPointCloud(
-    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_main,
-    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_to_remove,
-    double distance_threshold = 0.01);
-
-
-  static bool enforce_color_similarity(const pcl::PointXYZRGBA& a, const pcl::PointXYZRGBA& b, float /*squared_dist*/) ;
 
   moveit::planning_interface::MoveGroupInterface arm_group_{"panda_arm"};
   moveit::planning_interface::MoveGroupInterface hand_group_{"hand"};
 
   sensor_msgs::PointCloud2ConstPtr latest_cloud;
 
-  bool move_arm(geometry_msgs::Pose& target_pose);
+  bool move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian = false);
   
   pcl::PCLPointCloud2 pcl_pc_;
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr convertToPCL(
@@ -192,8 +185,14 @@ public:
 
 
   std::mutex cloud_mutex;
-  void merge_clouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr new_cloud);
+  // void merge_clouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr new_cloud);
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr combined_cloud;
+  float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2);
+  void delete_groud_plane(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr in_cloud, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr out_cloud);
+  void filterPointCloudByHeight(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr input_cloud, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr output_cloud, float min_height, float max_height);
+  void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
+  void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud);
+ 
 
 };
 

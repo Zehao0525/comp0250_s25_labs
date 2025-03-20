@@ -131,8 +131,11 @@ include_directories(
 add_library(${PROJECT_NAME}_cw2_class_lib
   src/cw2_class.cpp
   src/pcl_tools.cpp
-  src/scan_and_generate.cpp
+  src/move_and_pick.cpp
 )
+
+add_library(detect_object_Lib SHARED src/detect_object.cpp)
+add_library(shape_generator_Lib SHARED src/shape_generator.cpp)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
@@ -148,6 +151,8 @@ add_dependencies(${PROJECT_NAME}_cw2_class_lib
 add_executable(cw2_solution_node src/cw2_node.cpp)
 
 add_executable(PCL_test src/PCL_test.cpp)
+add_executable(shape_generator_test src/shape_generator_test.cpp)
+
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -178,6 +183,13 @@ target_link_libraries(PCL_test
   ${PCL_LIBRARIES}
 )
 
+target_link_libraries(detect_object_Lib ${catkin_LIBRARIES})
+target_link_libraries(shape_generator_Lib ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+
+
+target_link_libraries(cw2_solution_node detect_object_Lib shape_generator_Lib)
+target_link_libraries(PCL_test detect_object_Lib)
+target_link_libraries(shape_generator_test shape_generator_Lib)
 #############
 ## Install ##
 #############
@@ -232,3 +244,7 @@ target_link_libraries(PCL_test
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
+enable_testing()
+add_test(NAME shape_generator_test COMMAND shape_generator_test)
+# set_tests_properties(shape_generator_test PROPERTIES TIMEOUT 20) # 超时10秒

@@ -1,8 +1,9 @@
-#include "cw2_class.h"
+// #include "cw2_class.h"
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include <pcl/filters/filter.h>
 #include <iostream>
+#include "detect_object.h"
 
 
 int main(int argc, char** argv) {
@@ -36,15 +37,13 @@ int main(int argc, char** argv) {
     pcl::removeNaNFromPointCloud(*cloud, *cloud_filtered, indices);
     std::cout << "过滤NaN后点云包含 " << cloud_filtered->points.size() << " 个点。" << std::endl;
     
-    // 创建cw2类实例
-    cw2 test_obj(nh);
     
     // 创建检测结果向量
     std::vector<DetectedObject> detected_objects;
     
     // 执行物体检测
     std::cout << "开始执行物体检测..." << std::endl;
-    test_obj.detect_objects(cloud_filtered, detected_objects);
+    detect_objects(cloud_filtered, detected_objects);
     
     // 显示检测结果
     std::cout << "\n检测到 " << detected_objects.size() << " 个物体:" << std::endl;
