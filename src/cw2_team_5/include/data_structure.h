@@ -18,6 +18,11 @@ public:
 
   }
 
+  void operator=(const geometry_msgs::Pose& pose) {
+    orientation = pose.orientation;
+    position = pose.position;
+  }
+
 };
 
 

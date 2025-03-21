@@ -3,12 +3,13 @@
 #include <moveit/robot_trajectory/robot_trajectory.h>
 
 bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian) {
-  ROS_INFO("Setting pose target.");
+  ROS_INFO("开始移动机械臂到目标位置");
   
-  const int max_attempts = 5;  // 最大尝试次数（简化为3次）
-  
+  const int max_attempts = 10;
+  arm_group_.setPlanningTime(10.0);
+  // 1. 尝试笛卡尔路径规划（如果要求）
   if (use_cartesian) {
-    ROS_INFO("Using Cartesian Path for motion planning.");
+    ROS_INFO("使用笛卡尔路径规划");
     
     for (int attempt = 0; attempt < max_attempts; attempt++) {
       // 创建路径点
@@ -18,35 +19,26 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian) {
       
       // 计算笛卡尔路径
       moveit_msgs::RobotTrajectory trajectory;
-      const double jump_threshold = 0.0;  // 设置0以避免跳跃
-      const double eef_step = 0.01;  // 每次步进 1cm
-      double fraction = arm_group_.computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
+      double fraction = arm_group_.computeCartesianPath(waypoints, 0.01, 0.0, trajectory);
       
       if (fraction < 0.95) {
-        ROS_WARN("Only %.2f%% of the path was computed. Fallback to regular planning.", fraction * 100.0);
-        return move_arm(target_pose, false); // 回退到普通规划
+        ROS_WARN("仅计算了 %.2f%% 的路径，切换到普通规划", fraction * 100.0);
+        break; // 退出循环，进入普通规划
       }
       
       // 添加时间参数化处理
       robot_trajectory::RobotTrajectory rt(arm_group_.getCurrentState()->getRobotModel(), arm_group_.getName());
       rt.setRobotTrajectoryMsg(*arm_group_.getCurrentState(), trajectory);
       
-      // 使用时间参数化调整轨迹，降低执行速度
+      // 降低执行速度
       trajectory_processing::IterativeParabolicTimeParameterization iptp;
-      bool success = iptp.computeTimeStamps(rt, 0.3, 0.3);  // 降低速度和加速度
-      
-      if (!success) {
-        ROS_WARN("Time parameterization failed on attempt %d.", attempt + 1);
-        if (attempt == max_attempts - 1) {
-          return move_arm(target_pose, false);  // 最后一次尝试失败，回退到普通规划
-        }
+      if (!iptp.computeTimeStamps(rt, 0.3, 0.3)) {
+        ROS_WARN("时间参数化失败，尝试 %d", attempt + 1);
         continue;
       }
       
-      // 将时间参数化的轨迹转回到plan中
-      rt.getRobotTrajectoryMsg(trajectory);
-      
       // 执行轨迹
+      rt.getRobotTrajectoryMsg(trajectory);
       moveit::planning_interface::MoveGroupInterface::Plan my_plan;
       my_plan.trajectory_ = trajectory;
       auto exec_result = arm_group_.execute(my_plan);
@@ -56,109 +48,97 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian) {
         return true;
       }
       
-      ROS_WARN("Cartesian execution failed on attempt %d. Error code: %d", 
-               attempt + 1, exec_result.val);
-      
-      // 短暂等待后重试
+      ROS_WARN("笛卡尔执行失败，尝试 %d。错误代码: %d", attempt + 1, exec_result.val);
       ros::Duration(0.5).sleep();
     }
     
-    // 所有笛卡尔尝试失败，回退到普通规划
-    ROS_WARN("All Cartesian attempts failed. Switching to regular planning.");
-    return move_arm(target_pose, false);
-    
-  } else {
-    // 普通规划部分
-    arm_group_.setPoseTarget(target_pose);
-    
-    moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-    
-    for (int attempt = 0; attempt < max_attempts; attempt++) {
-      ROS_INFO("Regular planning attempt %d...", attempt + 1);
-      
-      bool plan_success = (arm_group_.plan(my_plan) == 
-                          moveit::planning_interface::MoveItErrorCode::SUCCESS);
-      
-      if (!plan_success) {
-        if (attempt < max_attempts - 1) {
-          // 创建调整后的位置（提高z坐标）
-          geometry_msgs::Pose adjusted_pose = target_pose;
-          adjusted_pose.position.z += 0.05 + 0.03 * attempt;  // 每次增加更多高度
-          
-          ROS_INFO("规划失败。先移动到调整高度 %.3f 的位置，然后再尝试原始目标。", 
-                  adjusted_pose.position.z);
-          
-          // 递归调用move_arm执行调整后的位置
-          bool adjusted_move_success = move_arm(adjusted_pose, false);
-          
-          if (adjusted_move_success) {
-            ROS_INFO("成功移动到调整位置，现在尝试原始目标位置");
-            // 重新设置原始目标并继续尝试
-            arm_group_.setPoseTarget(target_pose);
-          } else {
-            ROS_WARN("移动到调整位置失败，继续尝试下一个调整");
-            continue;
-          }
-        } else {
-          ROS_WARN("在 %d 次尝试后规划失败", max_attempts);
-          return false;
-        }
-      }
-      
-      // 执行计划（原始目标位置）
-      auto exec_result = arm_group_.execute(my_plan);
-      bool exec_success = (exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS || 
-                          exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT);
-      
-      if (exec_success) {
-        return true;
-      }
-      
-      ROS_WARN("计划执行失败，尝试次数 %d。错误代码: %d", 
-              attempt + 1, exec_result.val);
-      
-      // 如果执行失败，也尝试移动到调整位置然后再次尝试
-      if (attempt < max_attempts - 1) {
-        geometry_msgs::Pose recovery_pose = target_pose;
-        recovery_pose.position.z += 0.08 + 0.04 * attempt;  // 使用更大的调整
-        
-        ROS_INFO("执行失败后尝试恢复位置 z=%.3f", recovery_pose.position.z);
-        bool recovery_success = move_arm(recovery_pose, false);
-        
-        if (recovery_success) {
-          ROS_INFO("成功移动到恢复位置，继续尝试");
-        }
-      }
-      
-      // 短暂等待后重试
-      ros::Duration(0.5).sleep();
-    }
-    
-    ROS_WARN("所有规划和执行尝试都失败了");
-    return false;
+    ROS_WARN("所有笛卡尔尝试失败，切换到普通规划");
+    use_cartesian = false; // 切换到普通规划
+    // 这里不使用递归调用，而是继续执行下面的普通规划代码
   }
+  
+  // 2. 普通规划部分
+  arm_group_.setPoseTarget(target_pose);
+  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+  
+  for (int attempt = 0; attempt < max_attempts; attempt++) {
+    ROS_INFO("普通规划尝试 %d...", attempt + 1);
+    
+    // 尝试规划
+    bool plan_success = (arm_group_.plan(my_plan) == 
+                        moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    
+    // 规划失败处理
+    if (!plan_success) {
+      if (attempt >= max_attempts - 1) {
+        ROS_WARN("在 %d 次尝试后规划失败", max_attempts);
+        return false;
+      }
+      
+      // 尝试调整高度
+      geometry_msgs::Pose adjusted_pose = target_pose;
+      adjusted_pose.position.z += std::rand() % 10 * 0.01;
+
+      
+      ROS_INFO("规划失败。尝试调整高度为 %.3f", adjusted_pose.position.z);
+      arm_group_.setPoseTarget(adjusted_pose);
+      
+      if (arm_group_.plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+        continue; // 调整高度后规划仍失败，继续下一次尝试
+      }
+      
+      // 执行调整高度的移动
+      if (arm_group_.execute(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+        continue; // 调整高度的移动执行失败，继续下一次尝试
+      }
+      
+      // 成功移动到调整位置，重新尝试原始目标
+      ROS_INFO("成功移动到调整位置，现在尝试原始目标位置");
+      arm_group_.setPoseTarget(target_pose);
+      if (arm_group_.plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+        continue; // 重新规划原始目标失败，继续下一次尝试
+      }
+    }
+    
+    // 执行计划
+    auto exec_result = arm_group_.execute(my_plan);
+    if (exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS || 
+        exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT) {
+      return true;
+    }
+    
+    ROS_WARN("计划执行失败，尝试 %d。错误代码: %d", attempt + 1, exec_result.val);
+    
+    // 执行失败后尝试恢复位置
+    if (attempt < max_attempts - 1) {
+      geometry_msgs::Pose recovery_pose = target_pose;
+      // recovery_pose.position.z += 0.08 + 0.04 * attempt;
+      recovery_pose.position.z += std::rand() % 10 * 0.01;
+      
+      ROS_INFO("尝试恢复位置 z=%.3f", recovery_pose.position.z);
+      arm_group_.setPoseTarget(recovery_pose);
+      
+      if (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS && 
+          arm_group_.execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
+        ROS_INFO("成功移动到恢复位置");
+      }
+    }
+    
+    ros::Duration(0.5).sleep();
+  }
+  
+  ROS_WARN("所有规划和执行尝试都失败了");
+  return false;
 }
 
-
 void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Point& obj_loc, const geometry_msgs::Point& goal_loc) {
+  Init_Pose obj_point;
+  obj_point.position = obj_loc;
+  pick_and_place(obj_name, obj_point, goal_loc);
+}
+
+void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose& obj_loc, const geometry_msgs::Point& goal_loc) {
     ROS_INFO("picking up and placing: %s", obj_name.c_str());
-    
-    // We specify waypoints for the arm trajectory
-    // geometry_msgs::Pose lift_pos, goal_pos;
-    
-    // Init_Pose target_pose;
-    // // We specify the location the arm need to reach to pick up the object
-    // target_pose.position.x = obj_loc.x;
-    // target_pose.position.y = obj_loc.y;
-    // //target_pos.position.z = obj_loc.z + 0.125; //0.125 is the tested distance for the end effector to grab the cube firmly
-    // target_pose.position.z = 0.04 + 0.1; //0.03 is the hard coded position of the cubes
-    
-    
-    // // We define the pose above the goal for he arm to move to
-    // goal_pos = target_pose;
-    // goal_pos.position.x = goal_loc.x;
-    // goal_pos.position.y = goal_loc.y;
-    // goal_pos.position.z = 0.05 + 0.1;  // 0.1(cup height) + 0.125(height from edn effector to bottom of cube) + 0.075(leeway)
     
     
     Init_Pose target_pos_down;
@@ -171,7 +151,7 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Point
     ///////////////////////////////////////////
     bool opgrip_success = move_gripper(1.0);
     
-    target_pos_down.position = obj_loc;
+    target_pos_down = obj_loc;
     target_pos_down.position.z = 0.04 + 0.1;
     bool move_down_success = move_arm(target_pos_down, true);
     
@@ -179,7 +159,7 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Point
     bool close_gripper_success = move_gripper(0.0);
     
     
-    target_pos_up.position = obj_loc;
+    target_pos_up = obj_loc;
     target_pos_up.position.z = 0.5;
     bool move_up_success = move_arm(target_pos_up, true);
     

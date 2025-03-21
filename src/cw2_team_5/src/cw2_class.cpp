@@ -137,7 +137,7 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
 
 
 
-  pick_and_place(shape_type, target_pose.position,  goal_pose.position);
+  pick_and_place(shape_type, target_pose,  goal_pose.position);
 
 
   return true;
