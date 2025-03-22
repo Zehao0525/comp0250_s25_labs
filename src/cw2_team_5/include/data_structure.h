@@ -22,7 +22,12 @@ public:
     orientation = pose.orientation;
     position = pose.position;
   }
-
+  
+  // Init_Pose& operator=(const geometry_msgs::Pose& pose) {
+  //   this->position = pose.position;
+  //   this->orientation = pose.orientation;
+  //   return *this;
+  // }
 };
 
 

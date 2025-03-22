@@ -138,8 +138,8 @@ void cw2::translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cl
     point.z += tz;
   }
   
-  ROS_INFO("点云已平移: 中心(%f, %f, %f) -> 原点(0, 0, 0)", 
-           centroid[0], centroid[1], centroid[2]);
+  // ROS_INFO("点云已平移: 中心(%f, %f, %f) -> 原点(0, 0, 0)", 
+  //          centroid[0], centroid[1], centroid[2]);
 }
 
 void cw2::translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
@@ -159,6 +159,6 @@ void cw2::translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud)
     point.z += tz;
   }
   
-  ROS_INFO("点云已平移: 中心(%f, %f, %f) -> 原点(0, 0, 0)", 
-           centroid[0], centroid[1], centroid[2]);
+  // ROS_INFO("点云已平移: 中心(%f, %f, %f) -> 原点(0, 0, 0)", 
+  //          centroid[0], centroid[1], centroid[2]);
 }

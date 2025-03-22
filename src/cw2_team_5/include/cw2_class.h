@@ -27,6 +27,7 @@ solution is contained within the cw2_team_<your_team_number> package */
 #include <thread>
 #include <mutex>
 #include <future>
+#include <random>
 
 
 // system includes
@@ -136,7 +137,7 @@ public:
 
   sensor_msgs::PointCloud2ConstPtr latest_cloud;
 
-  bool move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian = false);
+  bool move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian = false, int recursion_depth = 0);
   
   pcl::PCLPointCloud2 pcl_pc_;
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr convertToPCL(
@@ -162,6 +163,9 @@ public:
 
   bool move_gripper(float width);
   void set_constraint();
+  void clear_constraint();
+
+  void set_height_constraint(double min_height);
   void pick_and_place(const std::string& obj_name, 
     const geometry_msgs::Point& obj_loc, 
     const geometry_msgs::Point& goal_loc) ;
@@ -194,6 +198,10 @@ public:
   void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud);
   void pick_and_place(const std::string& obj_name, const geometry_msgs::Pose& obj_loc, const geometry_msgs::Point& goal_loc) ;
 
+
 };
+
+
+inline double random_double(double min, double max); 
 
 #endif // end of include guard for cw2_CLASS_H_

@@ -1,135 +1,161 @@
+// File: move_and_pick.cpp
 #include "cw2_class.h"
+#include "external.h"
 #include <moveit/trajectory_processing/iterative_time_parameterization.h>
 #include <moveit/robot_trajectory/robot_trajectory.h>
 
-bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian) {
-  ROS_INFO("开始移动机械臂到目标位置");
-  
-  const int max_attempts = 10;
-  arm_group_.setPlanningTime(10.0);
-  // 1. 尝试笛卡尔路径规划（如果要求）
-  if (use_cartesian) {
-    ROS_INFO("使用笛卡尔路径规划");
-    
-    for (int attempt = 0; attempt < max_attempts; attempt++) {
-      // 创建路径点
-      std::vector<geometry_msgs::Pose> waypoints;
-      waypoints.push_back(arm_group_.getCurrentPose().pose);
-      waypoints.push_back(target_pose);
-      
-      // 计算笛卡尔路径
-      moveit_msgs::RobotTrajectory trajectory;
-      double fraction = arm_group_.computeCartesianPath(waypoints, 0.01, 0.0, trajectory);
-      
-      if (fraction < 0.95) {
-        ROS_WARN("仅计算了 %.2f%% 的路径，切换到普通规划", fraction * 100.0);
-        break; // 退出循环，进入普通规划
-      }
-      
-      // 添加时间参数化处理
-      robot_trajectory::RobotTrajectory rt(arm_group_.getCurrentState()->getRobotModel(), arm_group_.getName());
-      rt.setRobotTrajectoryMsg(*arm_group_.getCurrentState(), trajectory);
-      
-      // 降低执行速度
-      trajectory_processing::IterativeParabolicTimeParameterization iptp;
-      if (!iptp.computeTimeStamps(rt, 0.3, 0.3)) {
-        ROS_WARN("时间参数化失败，尝试 %d", attempt + 1);
-        continue;
-      }
-      
-      // 执行轨迹
-      rt.getRobotTrajectoryMsg(trajectory);
-      moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-      my_plan.trajectory_ = trajectory;
-      auto exec_result = arm_group_.execute(my_plan);
-      
-      if (exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS || 
-          exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT) {
-        return true;
-      }
-      
-      ROS_WARN("笛卡尔执行失败，尝试 %d。错误代码: %d", attempt + 1, exec_result.val);
-      ros::Duration(0.5).sleep();
-    }
-    
-    ROS_WARN("所有笛卡尔尝试失败，切换到普通规划");
-    use_cartesian = false; // 切换到普通规划
-    // 这里不使用递归调用，而是继续执行下面的普通规划代码
-  }
-  
-  // 2. 普通规划部分
-  arm_group_.setPoseTarget(target_pose);
-  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-  
-  for (int attempt = 0; attempt < max_attempts; attempt++) {
-    ROS_INFO("普通规划尝试 %d...", attempt + 1);
-    
-    // 尝试规划
-    bool plan_success = (arm_group_.plan(my_plan) == 
-                        moveit::planning_interface::MoveItErrorCode::SUCCESS);
-    
-    // 规划失败处理
-    if (!plan_success) {
-      if (attempt >= max_attempts - 1) {
-        ROS_WARN("在 %d 次尝试后规划失败", max_attempts);
-        return false;
-      }
-      
-      // 尝试调整高度
-      geometry_msgs::Pose adjusted_pose = target_pose;
-      adjusted_pose.position.z += std::rand() % 10 * 0.01;
 
-      
-      ROS_INFO("规划失败。尝试调整高度为 %.3f", adjusted_pose.position.z);
-      arm_group_.setPoseTarget(adjusted_pose);
-      
-      if (arm_group_.plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
-        continue; // 调整高度后规划仍失败，继续下一次尝试
-      }
-      
-      // 执行调整高度的移动
-      if (arm_group_.execute(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
-        continue; // 调整高度的移动执行失败，继续下一次尝试
-      }
-      
-      // 成功移动到调整位置，重新尝试原始目标
-      ROS_INFO("成功移动到调整位置，现在尝试原始目标位置");
-      arm_group_.setPoseTarget(target_pose);
-      if (arm_group_.plan(my_plan) != moveit::planning_interface::MoveItErrorCode::SUCCESS) {
-        continue; // 重新规划原始目标失败，继续下一次尝试
-      }
+
+bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recursion_depth) {
+  ROS_INFO("Setting pose target.");
+  arm_group_.setPoseTarget(target_pose);
+
+  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+  bool plan_success = false;
+  bool exec_success = false;
+
+  int attempts = 0;
+  const int max_attempts = 100;
+
+  while ((!plan_success || !exec_success) && attempts < max_attempts) {
+    ROS_INFO("Planning attempt %d...", attempts + 1);
+    plan_success = (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    
+    attempts++;
+    if (!plan_success) {
+      continue;
     }
     
-    // 执行计划
     auto exec_result = arm_group_.execute(my_plan);
-    if (exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS || 
-        exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT) {
-      return true;
+    exec_success = exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS;
+    // We wil take time_outs, cause otherwise it will never fcking reach the goals
+    exec_success = exec_success || (exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT);
+    
+    if(exec_success) {
+      break;
     }
-    
-    ROS_WARN("计划执行失败，尝试 %d。错误代码: %d", attempt + 1, exec_result.val);
-    
-    // 执行失败后尝试恢复位置
-    if (attempt < max_attempts - 1) {
-      geometry_msgs::Pose recovery_pose = target_pose;
-      // recovery_pose.position.z += 0.08 + 0.04 * attempt;
-      recovery_pose.position.z += std::rand() % 10 * 0.01;
-      
-      ROS_INFO("尝试恢复位置 z=%.3f", recovery_pose.position.z);
-      arm_group_.setPoseTarget(recovery_pose);
-      
-      if (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS && 
-          arm_group_.execute(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS) {
-        ROS_INFO("成功移动到恢复位置");
-      }
-    }
-    
-    ros::Duration(0.5).sleep();
   }
   
-  ROS_WARN("所有规划和执行尝试都失败了");
-  return false;
+  if (!plan_success || !exec_success) {
+    ROS_WARN("Plan failed");
+  }
+  
+  return true;
 }
+
+
+
+// bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recursion_depth) {
+//   // 递归深度限制，防止无限递归
+//   const int max_recursion_depth = 3;
+//   if (recursion_depth > max_recursion_depth) {
+//     ROS_ERROR("Maximum recursion depth reached in move_arm. Aborting.");
+//     return false;
+//   }
+
+//   ROS_INFO("Setting pose target (recursion depth: %d).", recursion_depth);
+//   arm_group_.setPoseTarget(target_pose);
+//   arm_group_.setPlanningTime(20.0);
+
+//   moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+//   bool plan_success = false;
+//   bool exec_success = false;
+
+//   int attempts = 0;
+//   const int max_attempts = 4;
+
+//   while ((!plan_success || !exec_success) && attempts < max_attempts) {
+//     ROS_INFO("Planning attempt %d...", attempts + 1);
+//     plan_success = (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    
+//     attempts++;
+//     if (!plan_success) {
+//       ROS_WARN("Planning attempt %d failed.", attempts);
+//       continue;
+//     }
+
+//     // 对轨迹进行时间参数化
+//     // robot_trajectory::RobotTrajectory rt(arm_group_.getCurrentState()->getRobotModel(), "panda_arm");
+//     // rt.setRobotTrajectoryMsg(*arm_group_.getCurrentState(), my_plan.trajectory_);
+//     // trajectory_processing::IterativeParabolicTimeParameterization iptp;
+//     // bool success = iptp.computeTimeStamps(rt);
+//     // ROS_INFO("Computed time stamp %s", success ? "SUCCEEDED" : "FAILED");
+//     // rt.getRobotTrajectoryMsg(my_plan.trajectory_);
+//     // ///////////////////////////////////////////
+
+//     // saveTrajectoryToCSV(rt, "trajectory.csv");
+
+
+
+//     ////////////////////////////////////////////
+//     ROS_INFO("Executing plan...");
+//     auto exec_result = arm_group_.execute(my_plan);
+//     exec_success = exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS;
+//     // 考虑超时也算作一种成功，因为可能已经接近目标位置
+//     if (exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT) {
+//       ROS_WARN("Execution timed out, but continuing as this may be close enough.");
+//       exec_success = true;
+//     }
+    
+//     if(exec_success) {
+//       ROS_INFO("Execution successful.");
+//       break;
+//     } else {
+//       ROS_WARN("Execution failed with code: %d", exec_result);
+//     }
+//   }
+  
+//   if (!plan_success || !exec_success) {
+//     ROS_WARN("All attempts failed. Trying intermediate waypoint approach.");
+    
+//     // 获取当前位置
+//     Init_Pose current_pose;
+//     current_pose = arm_group_.getCurrentPose().pose;
+//     Init_Pose temp_pose;
+    
+//     // 计算中点位置
+//     temp_pose.position.x = (current_pose.position.x + target_pose.position.x) / 2.0;
+//     temp_pose.position.y = (current_pose.position.y + target_pose.position.y) / 2.0;
+//     temp_pose.position.z = (current_pose.position.z + target_pose.position.z) / 2.0;
+    
+//     // 使用球面线性插值(SLERP)计算姿态中点
+//     tf2::Quaternion q1, q2, q_result;
+//     tf2::convert(current_pose.orientation, q1);
+//     tf2::convert(target_pose.orientation, q2);
+    
+//     // 使用0.5作为插值参数t，计算中间姿态
+//     q_result = q1.slerp(q2, 0.5);
+//     q_result.normalize();
+//     tf2::convert(q_result, temp_pose.orientation);
+    
+//     ROS_INFO("Moving to intermediate waypoint.");
+//     bool waypoint_success;
+
+//     if (recursion_depth == max_recursion_depth - 1) {
+//       ROS_WARN("Maximum recursion depth reached. Attempting final target with temporary waypoint.(REMOVE THE CONSTRAINT)");
+//       // temp_pose.position.x -= 0.05;
+//       // temp_pose.position.y -= 0.05;
+//       clear_constraint();
+//       // set_height_constraint(0.1);
+//       waypoint_success = move_arm(temp_pose, use_cartesian, recursion_depth + 1);
+//       clear_constraint();
+//       set_constraint();
+
+//     } else {
+//       waypoint_success = move_arm(temp_pose, use_cartesian, recursion_depth + 1);
+//     }
+
+//     if (waypoint_success) {
+//       ROS_INFO("Successfully moved to intermediate waypoint. Attempting final target again.");
+//       return move_arm(target_pose, use_cartesian, recursion_depth + 1);
+//     } else {
+//       ROS_ERROR("Failed to move to intermediate waypoint.");
+//       return false;
+//     }
+//   }
+  
+//   return true;
+// }
 
 void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Point& obj_loc, const geometry_msgs::Point& goal_loc) {
   Init_Pose obj_point;
@@ -169,6 +195,7 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose&
     
     target_pos_down2.position = goal_loc;
     target_pos_down2.position.z = 0.5;
+    // clear_constraint();
     bool move_goal_success = move_arm(target_pos_down2);
     
     
@@ -189,7 +216,40 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose&
        }
       
 
-
+void cw2::set_height_constraint(double min_height = 0.1) {
+  // 清除所有现有的约束
+  clear_constraint();
+  
+  // 创建位置约束
+  moveit_msgs::PositionConstraint position_constraint;
+  position_constraint.header.frame_id = "world"; // 或者您的基准坐标系
+  position_constraint.link_name = "panda_hand"; // 末端执行器链接名
+  
+  // 创建一个足够大的盒子，只限制z方向的下边界
+  shape_msgs::SolidPrimitive box;
+  box.type = shape_msgs::SolidPrimitive::BOX;
+  box.dimensions.resize(3);
+  box.dimensions[0] = 2.0; // x方向足够大
+  box.dimensions[1] = 2.0; // y方向足够大
+  box.dimensions[2] = 2.0; // z方向高度
+  
+  // 设置盒子位置，使其底部边界在min_height处
+  geometry_msgs::Pose box_pose;
+  box_pose.position.x = 0.0;
+  box_pose.position.y = 0.0;
+  box_pose.position.z = min_height + box.dimensions[2]/2.0;
+  box_pose.orientation.w = 1.0;
+  
+  position_constraint.constraint_region.primitives.push_back(box);
+  position_constraint.constraint_region.primitive_poses.push_back(box_pose);
+  position_constraint.weight = 1.0;
+  
+  // 将位置约束添加到约束集合
+  constraints_.position_constraints.push_back(position_constraint);
+  
+  // 应用约束
+  arm_group_.setPathConstraints(constraints_);
+}
 
 void cw2::set_constraint() {
     joint_constraints_[0].joint_name = "panda_joint1";
@@ -244,6 +304,13 @@ void cw2::set_constraint() {
     arm_group_.setPathConstraints(constraints_);
   }
   
+  void cw2::clear_constraint() {
+    constraints_.joint_constraints.clear();
+    constraints_.position_constraints.clear();  
+    arm_group_.clearPathConstraints();
+  }
+
+
   bool cw2::move_gripper(float width) {
     // safety checks in case width exceeds safe values
     if (width > gripper_open_) {
@@ -278,3 +345,11 @@ void cw2::set_constraint() {
     return success;
   }
   
+
+inline double random_double(double min, double max) {
+  std::random_device rd;
+  std::mt19937 gen(rd());  // 随机种子
+  std::uniform_real_distribution<> dist(min, max);  // 均匀分布
+  double r = dist(gen);
+  return r;
+}

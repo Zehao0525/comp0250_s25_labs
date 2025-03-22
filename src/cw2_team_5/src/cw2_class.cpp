@@ -93,7 +93,7 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
 
 
   float rot_degree = 0;
-  for (float degrees = 0; degrees < 90; degrees += 2.5) {
+  for (float degrees = 0; degrees < 90; degrees += 0.5) {
     Eigen::Affine3f transform = Eigen::Affine3f::Identity();
     transform.rotate(Eigen::AngleAxisf(degrees * M_PI / 180, Eigen::Vector3f::UnitZ()));
     pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZ>);
@@ -101,7 +101,7 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
     pcl::io::savePCDFileASCII("2.pcd", *transformed_cloud);
     // 检查重叠率
     float overlap = calculateOverlap(obj_cloud_ptr, transformed_cloud);
-    if (overlap > 0.95) {
+    if (overlap > 0.98) {
       std::cout << "Found the correct rotation angle: " << degrees << std::endl;
       rot_degree = degrees;
       break;
@@ -150,7 +150,7 @@ cw2::t2_callback(cw2_world_spawner::Task2Service::Request &request,
   cw2_world_spawner::Task2Service::Response &response)
 {
   /* function which should solve task 2 */
-  set_constraint();
+  // set_constraint();
 
   // decoder
   std::vector<geometry_msgs::Point> ref_object_points;
