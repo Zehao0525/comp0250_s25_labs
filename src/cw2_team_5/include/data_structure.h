@@ -54,6 +54,7 @@ struct ShapeDetectionResult {
   float size;
   float overlap_score;
   Eigen::Matrix<float, 4, 1> centroid;
+  uint8_t r, g, b;
 
   ShapeDetectionResult() {
     rotation_angle = -1.0;
@@ -61,7 +62,10 @@ struct ShapeDetectionResult {
     size = 0.0;
     overlap_score = 0.0;
     centroid << 0.0, 0.0, 0.0, 0.0;
+    r, g, b = 0;
   }
+
+
 };
 
 #endif // end of include guard for DATA_STRUCTURE_H_

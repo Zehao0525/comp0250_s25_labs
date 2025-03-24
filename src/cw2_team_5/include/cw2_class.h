@@ -28,7 +28,7 @@ solution is contained within the cw2_team_<your_team_number> package */
 #include <mutex>
 #include <future>
 #include <random>
-
+#include <filesystem>
 
 // system includes
 #include <ros/ros.h>
@@ -203,9 +203,9 @@ public:
 
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr scanPlatform(
     float platform_width = 1.5,
-    float platform_height = 1.1,
-    float scan_interval = 0.3,
-    float scan_height = 0.5,
+    float platform_height = 1,
+    float scan_interval = 0.25,
+    float scan_height = 0.55,
     bool skip_center = true,
     const std::string& output_filename = "task3_scan_result1.pcd");
 

@@ -214,7 +214,7 @@ cw2::t2_callback(cw2_world_spawner::Task2Service::Request &request,
   pcl::transformPointCloud(*obj_cloud_ptr, *obj_cloud_ptr, transform);
   
   // 检测神秘对象的形状
-  ShapeDetectionResult mystery_result = detectShapeRotation(obj_cloud_ptr);
+  ShapeDetectionResult mystery_result = detectShapeRotation_multi(obj_cloud_ptr);
   if (mystery_result.rotation_angle < 0) {
     ROS_ERROR("Cannot detect shape for mystery object");
     return false;

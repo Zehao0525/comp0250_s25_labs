@@ -66,6 +66,7 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
   // 使用笛卡尔路径规划
   if (use_cartesian) {
     ROS_INFO("Using Cartesian path planning");
+    clear_constraint();
     
     // 获取当前末端执行器位置
     geometry_msgs::Pose start_pose = arm_group_.getCurrentPose().pose;
@@ -77,7 +78,7 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
     
     // 计算笛卡尔路径
     moveit_msgs::RobotTrajectory trajectory;
-    clear_constraint();
+
     double fraction = arm_group_.computeCartesianPath(waypoints, 
                                                     0.01,    // 路径点之间的最大步长(eef_step)
                                                     0.0,     // 跳跃阈值
@@ -90,14 +91,33 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
       // 构建完整的计划
       my_plan.trajectory_ = trajectory;
       plan_success = true;
-      
+      clear_constraint();
+
+      //////////////////////////////////////////////
+
+      // 优化轨迹速度
+      robot_trajectory::RobotTrajectory rt(arm_group_.getCurrentState()->getRobotModel(), "panda_arm");
+      rt.setRobotTrajectoryMsg(*arm_group_.getCurrentState(), my_plan.trajectory_);
+
+      // 应用速度和加速度缩放因子进行时间参数化
+      trajectory_processing::IterativeParabolicTimeParameterization iptp;
+      double velocity_scaling_factor = 1.5;  // 速度缩放因子（提高速度）
+      double acceleration_scaling_factor = 1;  // 加速度缩放因子
+      iptp.computeTimeStamps(rt, velocity_scaling_factor, acceleration_scaling_factor);
+
+      rt.getRobotTrajectoryMsg(my_plan.trajectory_);
+
+      ///////////////////////////////////////////////
+
+
       // 执行计划
       ROS_INFO("Executing Cartesian path plan...");
-      clear_constraint();
+
       auto exec_result = arm_group_.execute(my_plan);
-      set_constraint();
+
       exec_success = exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS;
-      
+      set_constraint();
+
       // 考虑超时也算作一种成功
       if (exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT) {
         ROS_WARN("Execution timed out, but continuing as this may be close enough.");
@@ -126,6 +146,22 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
         ROS_WARN("Planning attempt %d failed.", attempts);
         continue;
       }
+
+      /////////////////////////////////////////
+      // 优化轨迹速度
+      robot_trajectory::RobotTrajectory rt(arm_group_.getCurrentState()->getRobotModel(), "panda_arm");
+      rt.setRobotTrajectoryMsg(*arm_group_.getCurrentState(), my_plan.trajectory_);
+
+      // 应用速度和加速度缩放因子进行时间参数化
+      trajectory_processing::IterativeParabolicTimeParameterization iptp;
+      double velocity_scaling_factor = 1.5;  // 速度缩放因子（提高速度）
+      double acceleration_scaling_factor = 1;  // 加速度缩放因子
+      iptp.computeTimeStamps(rt, velocity_scaling_factor, acceleration_scaling_factor);
+
+      // 将优化后的轨迹应用回计划
+      rt.getRobotTrajectoryMsg(my_plan.trajectory_);
+      /////////////////////////////////////////
+
 
       ROS_INFO("Executing plan...");
       auto exec_result = arm_group_.execute(my_plan);
@@ -250,7 +286,7 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose&
     bool open_gripper_success = move_gripper(1.0);
     
     target_pos_up2.position = goal_loc;
-    target_pos_up2.position.z = 0.5;
+    target_pos_up2.position.z = 0.4;
     bool move_up_success2 = move_arm(target_pos_up2, true);
        }
       
@@ -301,6 +337,8 @@ void cw2::set_constraint() {
     joint_constraints_[1].position = 0.4;
     joint_constraints_[1].tolerance_above = M_PI * 0.8;
     joint_constraints_[1].tolerance_below = M_PI * 0.8;
+    // joint_constraints_[1].tolerance_above = M_PI * 0.5;
+    // joint_constraints_[1].tolerance_below = M_PI * 0.5;
     joint_constraints_[1].weight = 1.0;
   
     joint_constraints_[2].joint_name = "panda_joint3";
@@ -313,6 +351,8 @@ void cw2::set_constraint() {
     joint_constraints_[3].position = -2.13;
     joint_constraints_[3].tolerance_above = M_PI * 0.5;
     joint_constraints_[3].tolerance_below = M_PI * 0.5;
+    // joint_constraints_[3].tolerance_above = M_PI * 0.4;
+    // joint_constraints_[3].tolerance_below = M_PI * 0.4;
     joint_constraints_[3].weight = 1.0;
   
     joint_constraints_[4].joint_name = "panda_joint5";

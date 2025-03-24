@@ -32,6 +32,9 @@ bool checkBasket(
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr working_cloud,
     std::vector<ShapeDetectionResult>& detected_objects);
 
+    void clusterPointCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud, 
+        std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr>& valid_clusters) ;
+        bool isValidObjectCluster(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cluster, const Eigen::Vector3f& dims) ;
 
 ////////////////////
 #include <thread>
