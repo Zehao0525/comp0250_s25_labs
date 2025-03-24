@@ -61,6 +61,6 @@ if __name__ == "__main__":
     # visualize_pcd_with_axes(args.pcd_file)
 
     pcd_file = "ought_shape.pcd"
-    pcd_file = "2.pcd"
+    pcd_file = "1.pcd"
 
     visualize_pcd_with_axes(pcd_file)

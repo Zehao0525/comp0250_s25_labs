@@ -6,63 +6,16 @@
 
 
 
-bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recursion_depth) {
-  ROS_INFO("Setting pose target.");
-  arm_group_.setPoseTarget(target_pose);
-
-  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-  bool plan_success = false;
-  bool exec_success = false;
-
-  int attempts = 0;
-  const int max_attempts = 100;
-
-  while ((!plan_success || !exec_success) && attempts < max_attempts) {
-    ROS_INFO("Planning attempt %d...", attempts + 1);
-    plan_success = (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-    
-    attempts++;
-    if (!plan_success) {
-      continue;
-    }
-    
-    auto exec_result = arm_group_.execute(my_plan);
-    exec_success = exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS;
-    // We wil take time_outs, cause otherwise it will never fcking reach the goals
-    exec_success = exec_success || (exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT);
-    
-    if(exec_success) {
-      break;
-    }
-  }
-  
-  if (!plan_success || !exec_success) {
-    ROS_WARN("Plan failed");
-  }
-  
-  return true;
-}
-
-
-
 // bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recursion_depth) {
-//   // 递归深度限制，防止无限递归
-//   const int max_recursion_depth = 3;
-//   if (recursion_depth > max_recursion_depth) {
-//     ROS_ERROR("Maximum recursion depth reached in move_arm. Aborting.");
-//     return false;
-//   }
-
-//   ROS_INFO("Setting pose target (recursion depth: %d).", recursion_depth);
+//   ROS_INFO("Setting pose target.");
 //   arm_group_.setPoseTarget(target_pose);
-//   arm_group_.setPlanningTime(20.0);
 
 //   moveit::planning_interface::MoveGroupInterface::Plan my_plan;
 //   bool plan_success = false;
 //   bool exec_success = false;
 
 //   int attempts = 0;
-//   const int max_attempts = 4;
+//   const int max_attempts = 2;
 
 //   while ((!plan_success || !exec_success) && attempts < max_attempts) {
 //     ROS_INFO("Planning attempt %d...", attempts + 1);
@@ -70,92 +23,178 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
     
 //     attempts++;
 //     if (!plan_success) {
-//       ROS_WARN("Planning attempt %d failed.", attempts);
 //       continue;
 //     }
-
-//     // 对轨迹进行时间参数化
-//     // robot_trajectory::RobotTrajectory rt(arm_group_.getCurrentState()->getRobotModel(), "panda_arm");
-//     // rt.setRobotTrajectoryMsg(*arm_group_.getCurrentState(), my_plan.trajectory_);
-//     // trajectory_processing::IterativeParabolicTimeParameterization iptp;
-//     // bool success = iptp.computeTimeStamps(rt);
-//     // ROS_INFO("Computed time stamp %s", success ? "SUCCEEDED" : "FAILED");
-//     // rt.getRobotTrajectoryMsg(my_plan.trajectory_);
-//     // ///////////////////////////////////////////
-
-//     // saveTrajectoryToCSV(rt, "trajectory.csv");
-
-
-
-//     ////////////////////////////////////////////
-//     ROS_INFO("Executing plan...");
+    
 //     auto exec_result = arm_group_.execute(my_plan);
 //     exec_success = exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS;
-//     // 考虑超时也算作一种成功，因为可能已经接近目标位置
-//     if (exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT) {
-//       ROS_WARN("Execution timed out, but continuing as this may be close enough.");
-//       exec_success = true;
-//     }
+//     // We wil take time_outs, cause otherwise it will never fcking reach the goals
+//     exec_success = exec_success || (exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT);
     
 //     if(exec_success) {
-//       ROS_INFO("Execution successful.");
 //       break;
-//     } else {
-//       ROS_WARN("Execution failed with code: %d", exec_result);
 //     }
 //   }
   
 //   if (!plan_success || !exec_success) {
-//     ROS_WARN("All attempts failed. Trying intermediate waypoint approach.");
-    
-//     // 获取当前位置
-//     Init_Pose current_pose;
-//     current_pose = arm_group_.getCurrentPose().pose;
-//     Init_Pose temp_pose;
-    
-//     // 计算中点位置
-//     temp_pose.position.x = (current_pose.position.x + target_pose.position.x) / 2.0;
-//     temp_pose.position.y = (current_pose.position.y + target_pose.position.y) / 2.0;
-//     temp_pose.position.z = (current_pose.position.z + target_pose.position.z) / 2.0;
-    
-//     // 使用球面线性插值(SLERP)计算姿态中点
-//     tf2::Quaternion q1, q2, q_result;
-//     tf2::convert(current_pose.orientation, q1);
-//     tf2::convert(target_pose.orientation, q2);
-    
-//     // 使用0.5作为插值参数t，计算中间姿态
-//     q_result = q1.slerp(q2, 0.5);
-//     q_result.normalize();
-//     tf2::convert(q_result, temp_pose.orientation);
-    
-//     ROS_INFO("Moving to intermediate waypoint.");
-//     bool waypoint_success;
+//     ROS_WARN("Plan failed will try unlocking the constraints");
+//     clear_constraint();
+//     set_constraint();
+//     move_arm(target_pose, use_cartesian, recursion_depth + 1);
 
-//     if (recursion_depth == max_recursion_depth - 1) {
-//       ROS_WARN("Maximum recursion depth reached. Attempting final target with temporary waypoint.(REMOVE THE CONSTRAINT)");
-//       // temp_pose.position.x -= 0.05;
-//       // temp_pose.position.y -= 0.05;
-//       clear_constraint();
-//       // set_height_constraint(0.1);
-//       waypoint_success = move_arm(temp_pose, use_cartesian, recursion_depth + 1);
-//       clear_constraint();
-//       set_constraint();
-
-//     } else {
-//       waypoint_success = move_arm(temp_pose, use_cartesian, recursion_depth + 1);
-//     }
-
-//     if (waypoint_success) {
-//       ROS_INFO("Successfully moved to intermediate waypoint. Attempting final target again.");
-//       return move_arm(target_pose, use_cartesian, recursion_depth + 1);
-//     } else {
-//       ROS_ERROR("Failed to move to intermediate waypoint.");
-//       return false;
-//     }
 //   }
   
 //   return true;
 // }
+
+
+
+bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recursion_depth) {
+  // 递归深度限制，防止无限递归
+  const int max_recursion_depth = 3;
+  if (recursion_depth > max_recursion_depth) {
+    ROS_ERROR("Maximum recursion depth reached in move_arm. Aborting.");
+    return false;
+  }
+
+  ROS_INFO("Setting pose target (recursion depth: %d).", recursion_depth);
+  
+  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+  bool plan_success = false;
+  bool exec_success = false;
+
+  // 使用笛卡尔路径规划
+  if (use_cartesian) {
+    ROS_INFO("Using Cartesian path planning");
+    
+    // 获取当前末端执行器位置
+    geometry_msgs::Pose start_pose = arm_group_.getCurrentPose().pose;
+    
+    // 创建一个包含起点和终点的路径点数组
+    std::vector<geometry_msgs::Pose> waypoints;
+    waypoints.push_back(start_pose);
+    waypoints.push_back(target_pose);
+    
+    // 计算笛卡尔路径
+    moveit_msgs::RobotTrajectory trajectory;
+    clear_constraint();
+    double fraction = arm_group_.computeCartesianPath(waypoints, 
+                                                    0.01,    // 路径点之间的最大步长(eef_step)
+                                                    0.0,     // 跳跃阈值
+                                                    trajectory);
+    
+    ROS_INFO("Cartesian path planning (%.2f%% achieved)", fraction * 100.0);
+    set_constraint();
+
+    if (fraction > 0.0) {
+      // 构建完整的计划
+      my_plan.trajectory_ = trajectory;
+      plan_success = true;
+      
+      // 执行计划
+      ROS_INFO("Executing Cartesian path plan...");
+      clear_constraint();
+      auto exec_result = arm_group_.execute(my_plan);
+      set_constraint();
+      exec_success = exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS;
+      
+      // 考虑超时也算作一种成功
+      if (exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT) {
+        ROS_WARN("Execution timed out, but continuing as this may be close enough.");
+        exec_success = true;
+      }
+    } else {
+      ROS_WARN("Could not compute Cartesian path, falling back to joint space planning.");
+      use_cartesian = false;  // 失败后尝试关节空间规划
+    }
+  }
+  
+  // 使用关节空间规划 (默认或笛卡尔规划失败后的回退)
+  if (!use_cartesian || !plan_success || !exec_success) {
+    arm_group_.setPoseTarget(target_pose);
+    // arm_group_.setPlanningTime(20.0);
+    
+    int attempts = 0;
+    const int max_attempts = 4;
+
+    while ((!plan_success || !exec_success) && attempts < max_attempts) {
+      ROS_INFO("Planning attempt %d...", attempts + 1);
+      plan_success = (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+      
+      attempts++;
+      if (!plan_success) {
+        ROS_WARN("Planning attempt %d failed.", attempts);
+        continue;
+      }
+
+      ROS_INFO("Executing plan...");
+      auto exec_result = arm_group_.execute(my_plan);
+      exec_success = exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS;
+      
+      if (exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT) {
+        ROS_WARN("Execution timed out, but continuing as this may be close enough.");
+        exec_success = true;
+      }
+      
+      if(exec_success) {
+        ROS_INFO("Execution successful.");
+        break;
+      } else {
+        ROS_WARN("Execution failed with code: %d", exec_result);
+      }
+    }
+  }
+  if (!plan_success || !exec_success) {
+    ROS_WARN("All attempts failed. Trying intermediate waypoint approach.");
+    
+    // 获取当前位置
+    Init_Pose current_pose;
+    current_pose = arm_group_.getCurrentPose().pose;
+    Init_Pose temp_pose;
+    
+    // 计算中点位置
+    temp_pose.position.x = (current_pose.position.x + target_pose.position.x) / 2.0;
+    temp_pose.position.y = (current_pose.position.y + target_pose.position.y) / 2.0;
+    temp_pose.position.z = (current_pose.position.z + target_pose.position.z) / 2.0;
+    
+    // 使用球面线性插值(SLERP)计算姿态中点
+    tf2::Quaternion q1, q2, q_result;
+    tf2::convert(current_pose.orientation, q1);
+    tf2::convert(target_pose.orientation, q2);
+    
+    // 使用0.5作为插值参数t，计算中间姿态
+    q_result = q1.slerp(q2, 0.5);
+    q_result.normalize();
+    tf2::convert(q_result, temp_pose.orientation);
+    
+    ROS_INFO("Moving to intermediate waypoint.");
+    bool waypoint_success;
+
+    if (recursion_depth == max_recursion_depth - 1) {
+      ROS_WARN("Maximum recursion depth reached. Attempting final target with temporary waypoint.(REMOVE THE CONSTRAINT)");
+      // temp_pose.position.x -= 0.05;
+      // temp_pose.position.y -= 0.05;
+      clear_constraint();
+      // set_height_constraint(0.1);
+      waypoint_success = move_arm(temp_pose, use_cartesian, recursion_depth + 1);
+      clear_constraint();
+      set_constraint();
+
+    } else {
+      waypoint_success = move_arm(temp_pose, use_cartesian, recursion_depth + 1);
+    }
+
+    if (waypoint_success) {
+      ROS_INFO("Successfully moved to intermediate waypoint. Attempting final target again.");
+      return move_arm(target_pose, use_cartesian, recursion_depth + 1);
+    } else {
+      ROS_ERROR("Failed to move to intermediate waypoint.");
+      return false;
+    }
+  }
+  
+  return true;
+}
 
 void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Point& obj_loc, const geometry_msgs::Point& goal_loc) {
   Init_Pose obj_point;
@@ -254,8 +293,8 @@ void cw2::set_height_constraint(double min_height = 0.1) {
 void cw2::set_constraint() {
     joint_constraints_[0].joint_name = "panda_joint1";
     joint_constraints_[0].position = 0.0;
-    joint_constraints_[0].tolerance_above = M_PI * 0.45;
-    joint_constraints_[0].tolerance_below = M_PI * 0.45;
+    joint_constraints_[0].tolerance_above = M_PI * 0.8;
+    joint_constraints_[0].tolerance_below = M_PI * 0.8;
     joint_constraints_[0].weight = 1.0;
   
     joint_constraints_[1].joint_name = "panda_joint2";
@@ -266,8 +305,8 @@ void cw2::set_constraint() {
   
     joint_constraints_[2].joint_name = "panda_joint3";
     joint_constraints_[2].position = 0.0;
-    joint_constraints_[2].tolerance_above = M_PI * 0.25;
-    joint_constraints_[2].tolerance_below = M_PI * 0.25;
+    joint_constraints_[2].tolerance_above = M_PI * 1;
+    joint_constraints_[2].tolerance_below = M_PI * 1;
     joint_constraints_[2].weight = 1.0;
   
     joint_constraints_[3].joint_name = "panda_joint4";
@@ -352,4 +391,46 @@ inline double random_double(double min, double max) {
   std::uniform_real_distribution<> dist(min, max);  // 均匀分布
   double r = dist(gen);
   return r;
+}
+
+
+
+void cw2::adjustPoseByShapeAndRotation(geometry_msgs::Pose& target_pose, 
+  const std::string& shape_type, 
+  float rot_degree) {
+// 旋转target_pose.orientation
+tf2::Quaternion q_orig, q_rot, q_new;
+tf2::convert(target_pose.orientation, q_orig);
+q_rot.setRPY(0, 0, rot_degree * M_PI / 180); // 旋转角度转换为弧度
+q_new = q_rot * q_orig;
+q_new.normalize();
+tf2::convert(q_new, target_pose.orientation);
+
+// 根据物体旋转角度计算偏移量
+float offset_distance = 0.0;
+float offset_x = 0.0;
+float offset_y = 0.0;
+float rad_angle = rot_degree * M_PI / 180.0; // 角度转弧度
+
+if (shape_type == "cross") {
+offset_distance = 0.05;
+// 根据旋转角度计算在旋转坐标系中的x、y分量
+offset_x = offset_distance * cos(rad_angle);
+offset_y = offset_distance * sin(rad_angle);
+
+ROS_INFO("Cross offset: [x: %f, y: %f] (angle: %f deg)", offset_x, offset_y, rot_degree);
+
+} else if (shape_type == "nought") {
+offset_distance = 0.08;
+// 对于nought形状，偏移方向是垂直于旋转方向的
+// 相当于在旋转坐标系中的y轴方向上偏移
+offset_x = -offset_distance * sin(rad_angle); // 注意这里是-sin
+offset_y = offset_distance * cos(rad_angle);
+
+ROS_INFO("Nought offset: [x: %f, y: %f] (angle: %f deg)", offset_x, offset_y, rot_degree);
+}
+
+// 应用计算出的偏移量
+target_pose.position.x += offset_x;
+target_pose.position.y += offset_y;
 }

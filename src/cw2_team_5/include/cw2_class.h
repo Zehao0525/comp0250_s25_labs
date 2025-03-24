@@ -199,6 +199,21 @@ public:
   void pick_and_place(const std::string& obj_name, const geometry_msgs::Pose& obj_loc, const geometry_msgs::Point& goal_loc) ;
 
 
+
+
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr scanPlatform(
+    float platform_width = 1.5,
+    float platform_height = 1.1,
+    float scan_interval = 0.3,
+    float scan_height = 0.5,
+    bool skip_center = true,
+    const std::string& output_filename = "task3_scan_result1.pcd");
+
+  // 在类定义中的其他成员函数声明旁边添加
+void adjustPoseByShapeAndRotation(geometry_msgs::Pose& target_pose, 
+  const std::string& shape_type, 
+  float rot_degree);
+
 };
 
 

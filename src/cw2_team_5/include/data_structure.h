@@ -2,6 +2,9 @@
 #define DATA_STRUCTURE_H_
 
 #include <geometry_msgs/Pose.h>
+#include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
+#include <Eigen/Dense>
 
 class Init_Pose : public geometry_msgs::Pose {
 public:
@@ -36,6 +39,29 @@ struct DetectedObject
   std::string type, color, name;
   geometry_msgs::Point position;
   float w,l,h,r,g,b;
+
+  DetectedObject() {
+    position.x = 0.0;
+    position.y = 0.0;
+    position.z = 0.0;
+  }
+};
+
+
+struct ShapeDetectionResult {
+  float rotation_angle;
+  std::string shape_type;
+  float size;
+  float overlap_score;
+  Eigen::Matrix<float, 4, 1> centroid;
+
+  ShapeDetectionResult() {
+    rotation_angle = -1.0;
+    shape_type = "unknown";
+    size = 0.0;
+    overlap_score = 0.0;
+    centroid << 0.0, 0.0, 0.0, 0.0;
+  }
 };
 
 #endif // end of include guard for DATA_STRUCTURE_H_

@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
     
     
     // 创建检测结果向量
-    std::vector<DetectedObject> detected_objects;
+    std::vector<ShapeDetectionResult> detected_objects;
     
     // 执行物体检测
     std::cout << "开始执行物体检测..." << std::endl;
@@ -49,11 +49,11 @@ int main(int argc, char** argv) {
     std::cout << "\n检测到 " << detected_objects.size() << " 个物体:" << std::endl;
     for (size_t i = 0; i < detected_objects.size(); i++) {
         const auto& obj = detected_objects[i];
-        std::cout << "物体 #" << i+1 << ":" << std::endl;
-        std::cout << "  类型: " << obj.type << std::endl;
-        std::cout << "  位置: [" << obj.position.x << ", " << obj.position.y << ", " << obj.position.z << "]" << std::endl;
-        std::cout << "  尺寸: [" << obj.w << ", " << obj.l << ", " << obj.h << "]" << std::endl;
-        std::cout << "  颜色: [R:" << (int)obj.r << ", G:" << (int)obj.g << ", B:" << (int)obj.b << "]" << std::endl;
+        // std::cout << "物体 #" << i+1 << ":" << std::endl;
+        // std::cout << "  类型: " << obj.type << std::endl;
+        // std::cout << "  位置: [" << obj.position.x << ", " << obj.position.y << ", " << obj.position.z << "]" << std::endl;
+        // std::cout << "  尺寸: [" << obj.w << ", " << obj.l << ", " << obj.h << "]" << std::endl;
+        // std::cout << "  颜色: [R:" << (int)obj.r << ", G:" << (int)obj.g << ", B:" << (int)obj.b << "]" << std::endl;
         std::cout << std::endl;
     }
     

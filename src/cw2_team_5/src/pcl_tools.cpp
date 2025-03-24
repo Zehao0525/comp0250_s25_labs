@@ -57,9 +57,11 @@ void cw2::reset_arm(){
 }
 
 float cw2::calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2) {
-  // 创建一个新的点云，复制cloud1但将所有Z坐标设为0
+  // 将两个点云平移到原点
   translatePointCloudToOrigin(cloud1);
   translatePointCloudToOrigin(cloud2);
+  
+  // 创建一个新的点云，将cloud1投影到XY平面上（Z=0）
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1_xy(new pcl::PointCloud<pcl::PointXYZRGBA>);
   cloud1_xy->points.resize(cloud1->points.size());
   for (size_t i = 0; i < cloud1->points.size(); ++i) {
@@ -70,11 +72,12 @@ float cw2::calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl:
   cloud1_xy->height = cloud1->height;
   cloud1_xy->is_dense = cloud1->is_dense;
 
-  // 创建一个KD树用于最近邻搜索，使用修改后的点云
+  // 创建一个KD树用于最近邻搜索
   pcl::KdTreeFLANN<pcl::PointXYZRGBA> kdtree;
   kdtree.setInputCloud(cloud1_xy);
 
-  int overlap_count = 0;
+  // 计算交集（intersection）
+  int intersection_count = 0;
   float distance_threshold = 0.01; // 距离阈值，单位：米
 
   // 遍历cloud2中的每个点，计算与cloud1中最近点的距离
@@ -88,13 +91,21 @@ float cw2::calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl:
     search_point.z = 0;  // Z坐标设为0
 
     if (kdtree.radiusSearch(search_point, distance_threshold, point_idx_radius_search, point_radius_squared_distance) > 0) {
-      overlap_count++;
+      intersection_count++;
     }
   }
 
-  // 计算重叠率
-  float overlap_ratio = static_cast<float>(overlap_count) / static_cast<float>(cloud2->points.size());
-  return overlap_ratio;
+  // 计算并集（union）= 点云1大小 + 点云2大小 - 交集大小
+  // 注意：这是一个近似值，因为我们没有精确地计算哪些点在cloud1中与cloud2重叠
+  // 为了更准确的IoU计算，我们应该执行双向搜索，但这会增加计算成本
+  int union_count = cloud1->points.size() + cloud2->points.size() - intersection_count;
+  
+  // 计算IoU(Intersection over Union)
+  float iou = static_cast<float>(intersection_count) / static_cast<float>(union_count);
+  
+  ROS_INFO("IoU: %.4f (Intersection: %d, Union: %d)", iou, intersection_count, union_count);
+  
+  return iou;
 }
 
 
@@ -162,3 +173,95 @@ void cw2::translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud)
   // ROS_INFO("点云已平移: 中心(%f, %f, %f) -> 原点(0, 0, 0)", 
   //          centroid[0], centroid[1], centroid[2]);
 }
+
+
+
+
+
+
+
+
+
+/**
+ * 执行平台的全局扫描并合并点云数据
+ * @param platform_width 平台宽度
+ * @param platform_height 平台高度
+ * @param scan_interval 扫描间隔
+ * @param min_height 扫描高度
+ * @param skip_center 是否跳过中心区域
+ * @param output_filename 输出文件名
+ * @return 合并后的点云
+ */
+pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cw2::scanPlatform(
+    float platform_width,
+    float platform_height,
+    float scan_interval,
+    float scan_height,
+    bool skip_center,
+    const std::string& output_filename)
+{
+  // 初始化新的点云对象
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr combined_cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+  
+  // 计算扫描区域
+  float half_width = platform_width / 2.0;
+  float half_height = platform_height / 2.0;
+  
+  // ROS_INFO("开始平台扫描 (宽度: %.2f, 高度: %.2f, 间隔: %.2f)", 
+  //          platform_width, platform_height, scan_interval);
+  
+  // 网格扫描模式
+  for (float x = scan_interval/2; x < platform_width; x += scan_interval) {
+    for (float y = scan_interval/2; y < platform_height; y += scan_interval) {
+      // 计算实际坐标（平移到平台中心）
+      geometry_msgs::Point goal_point;
+      goal_point.x = -half_width + x;
+      goal_point.y = -half_height + y;
+      goal_point.z = scan_height;
+      
+      // 如果需要跳过中心区域
+      if (skip_center && 
+          (goal_point.x < 0.2 && goal_point.x > -0.2) && 
+          (goal_point.y < 0.25 && goal_point.y > -0.25)) {
+        // ROS_INFO("跳过中心区域点: [%.2f, %.2f]", goal_point.x, goal_point.y);
+        continue;
+      }
+      
+      // 移动到扫描位置
+      Init_Pose target_pose;
+      target_pose.position = goal_point;
+      bool mvstate = move_arm(target_pose);
+      // ROS_INFO("移动到: [%.2f, %.2f] %s", 
+      //          goal_point.x, goal_point.y, 
+      //          mvstate ? "成功" : "失败");
+      
+      if (!mvstate) {
+        // ROS_WARN("移动失败，跳过该点");
+        continue;
+      }
+      
+      // 获取并处理点云数据
+      pcl::PointCloud<pcl::PointXYZRGBA>::Ptr current_cloud = 
+          convertToPCL(latest_cloud, tf_listener_, "world");
+      
+      // 合并点云
+      if (combined_cloud->empty()) {
+        combined_cloud = current_cloud;
+      } else {
+        *combined_cloud += *current_cloud;
+      }
+      
+      // ROS_INFO("当前点云大小: %zu", combined_cloud->points.size());
+    }
+  }
+  
+  // 保存结果（如果指定了文件名）
+  if (!output_filename.empty()) {
+    pcl::io::savePCDFileASCII(output_filename, *combined_cloud);
+    // ROS_INFO("点云已保存到: %s (总点数: %zu)", 
+    //          output_filename.c_str(), combined_cloud->points.size());
+  }
+  
+  return combined_cloud;
+}
+

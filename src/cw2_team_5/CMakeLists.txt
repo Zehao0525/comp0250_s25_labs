@@ -190,6 +190,9 @@ target_link_libraries(shape_generator_Lib ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 target_link_libraries(cw2_solution_node detect_object_Lib shape_generator_Lib)
 target_link_libraries(PCL_test detect_object_Lib)
 target_link_libraries(shape_generator_test shape_generator_Lib)
+target_link_libraries(detect_object_Lib shape_generator_Lib)
+
+target_link_libraries(cw2_solution_node  detect_object_Lib)
 #############
 ## Install ##
 #############
