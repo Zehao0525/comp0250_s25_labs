@@ -5,6 +5,7 @@
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
 #include <Eigen/Dense>
+#include <shape_msgs/SolidPrimitive.h>
 
 class Init_Pose : public geometry_msgs::Pose {
 public:
@@ -21,16 +22,16 @@ public:
 
   }
 
-  void operator=(const geometry_msgs::Pose& pose) {
-    orientation = pose.orientation;
-    position = pose.position;
-  }
-  
-  // Init_Pose& operator=(const geometry_msgs::Pose& pose) {
-  //   this->position = pose.position;
-  //   this->orientation = pose.orientation;
-  //   return *this;
+  // void operator=(const geometry_msgs::Pose& pose) {
+  //   orientation = pose.orientation;
+  //   position = pose.position;
   // }
+  
+  Init_Pose& operator=(const geometry_msgs::Pose& pose) {
+    this->position = pose.position;
+    this->orientation = pose.orientation;
+    return *this;
+  }
 };
 
 
@@ -65,6 +66,13 @@ struct ShapeDetectionResult {
     r, g, b = 0;
   }
 
+
+};
+
+
+struct Obstacle {
+  shape_msgs::SolidPrimitive obstacle;
+  geometry_msgs::Pose obstacle_pose;
 
 };
 

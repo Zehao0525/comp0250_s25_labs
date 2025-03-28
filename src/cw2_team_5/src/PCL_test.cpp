@@ -43,7 +43,8 @@ int main(int argc, char** argv) {
     
     // 执行物体检测
     std::cout << "开始执行物体检测..." << std::endl;
-    detect_objects(cloud_filtered, detected_objects);
+    std::vector<Obstacle> obstacles;
+    detect_objects(cloud_filtered, detected_objects, obstacles);
     
     // 显示检测结果
     std::cout << "\n检测到 " << detected_objects.size() << " 个物体:" << std::endl;
@@ -60,15 +61,3 @@ int main(int argc, char** argv) {
     return 0;
 }
 
-// int main(int argc, char** argv) {
-//     // 检查命令行参数
-//     // if (argc < 2) {
-//     //     std::cout << "用法: " << argv[0] << " <pcd_file_path>" << std::endl;
-//     //     return -1;
-//     // }
-    
-//     // 调用测试函数
-//     test_object_detection("./task3_scan_result.pcd");
-    
-//     return 0;
-// }

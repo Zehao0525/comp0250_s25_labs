@@ -91,6 +91,9 @@ solution is contained within the cw2_team_<your_team_number> package */
 #include "detect_object.h"
 #include "shape_generator.h"
 
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
+
 
 class cw2
 {
@@ -165,12 +168,9 @@ public:
   void set_constraint();
   void clear_constraint();
 
-  void set_height_constraint(double min_height);
   void pick_and_place(const std::string& obj_name, 
     const geometry_msgs::Point& obj_loc, 
     const geometry_msgs::Point& goal_loc) ;
-
-    void reset_arm();
 
   /////////////////
   // Temporary
@@ -188,7 +188,6 @@ public:
   // std::string input_pc_frame_id_;
 
 
-  std::mutex cloud_mutex;
   // void merge_clouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr new_cloud);
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr combined_cloud;
   float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2);
@@ -213,6 +212,19 @@ public:
 void adjustPoseByShapeAndRotation(geometry_msgs::Pose& target_pose, 
   const std::string& shape_type, 
   float rot_degree);
+
+
+
+  void clearObstacles();
+  void addObstacle(const Obstacle& obstacle);
+  std::vector<Obstacle> obstacles_;  // 全局障碍物列表
+
+  bool reset_arm(double min_height = 0.4, double target_height = 0.41);
+  // void reset_arm();
+private:
+  void set_z_constraint(double min_height = 0.4, double max_height = 1.2);
+  // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
+
 
 };
 

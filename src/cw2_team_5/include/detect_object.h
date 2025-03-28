@@ -6,8 +6,9 @@
 #include "data_structure.h"
 
 // void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, DetectedObject detected_objects, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& obj_cloud_ptr) ;
-void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::vector<ShapeDetectionResult>& detected_objects);
-// void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, DetectedObject detected_object);
+void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::vector<ShapeDetectionResult>& detected_objects, 
+    std::vector<Obstacle>& obstacles);
+    // void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, DetectedObject detected_object);
 
 void subtractPointCloud(
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_main,
@@ -34,7 +35,9 @@ bool checkBasket(
 
     void clusterPointCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud, 
         std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr>& valid_clusters) ;
-        bool isValidObjectCluster(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cluster, const Eigen::Vector3f& dims) ;
+        bool isValidObjectCluster(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cluster, 
+            const Eigen::Vector3f& dims, 
+            std::vector<Obstacle>& obstacles);
 
 ////////////////////
 #include <thread>

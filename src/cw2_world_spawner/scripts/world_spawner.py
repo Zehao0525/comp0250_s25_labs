@@ -77,7 +77,7 @@ T2_N_REF_SHAPES = 2                      # number of baskets to spawn
 T2_OBJECT_REF_POINTS = [(-0.43, -0.4), 
                         (-0.43,  0.4)]
 T2_ANY_ORIENTATION = True               # do we allow any rotation of a shape
-T2_GROUND_PLANE_NOISE = 0e-3             # do we add noise on the z height of the green tiles
+T2_GROUND_PLANE_NOISE = 50e-3             # do we add noise on the z height of the green tiles
 T2_USE_MULTIPLE_SIZES = False            # do we spawn objects with varying sizes
 
 # task 3 parameters

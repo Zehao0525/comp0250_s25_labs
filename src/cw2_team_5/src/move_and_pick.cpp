@@ -66,7 +66,6 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
   // 使用笛卡尔路径规划
   if (use_cartesian) {
     ROS_INFO("Using Cartesian path planning");
-    clear_constraint();
     
     // 获取当前末端执行器位置
     geometry_msgs::Pose start_pose = arm_group_.getCurrentPose().pose;
@@ -85,13 +84,11 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
                                                     trajectory);
     
     ROS_INFO("Cartesian path planning (%.2f%% achieved)", fraction * 100.0);
-    set_constraint();
 
     if (fraction > 0.0) {
       // 构建完整的计划
       my_plan.trajectory_ = trajectory;
       plan_success = true;
-      clear_constraint();
 
       //////////////////////////////////////////////
 
@@ -116,7 +113,6 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
       auto exec_result = arm_group_.execute(my_plan);
 
       exec_success = exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS;
-      set_constraint();
 
       // 考虑超时也算作一种成功
       if (exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT) {
@@ -135,7 +131,7 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
     // arm_group_.setPlanningTime(20.0);
     
     int attempts = 0;
-    const int max_attempts = 4;
+    const int max_attempts = 3;
 
     while ((!plan_success || !exec_success) && attempts < max_attempts) {
       ROS_INFO("Planning attempt %d...", attempts + 1);
@@ -208,13 +204,8 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
 
     if (recursion_depth == max_recursion_depth - 1) {
       ROS_WARN("Maximum recursion depth reached. Attempting final target with temporary waypoint.(REMOVE THE CONSTRAINT)");
-      // temp_pose.position.x -= 0.05;
-      // temp_pose.position.y -= 0.05;
-      clear_constraint();
-      // set_height_constraint(0.1);
+      reset_arm();
       waypoint_success = move_arm(temp_pose, use_cartesian, recursion_depth + 1);
-      clear_constraint();
-      set_constraint();
 
     } else {
       waypoint_success = move_arm(temp_pose, use_cartesian, recursion_depth + 1);
@@ -241,6 +232,7 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Point
 void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose& obj_loc, const geometry_msgs::Point& goal_loc) {
     ROS_INFO("picking up and placing: %s", obj_name.c_str());
     
+
     
     Init_Pose target_pos_down;
     Init_Pose target_pos_up;
@@ -252,6 +244,9 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose&
     ///////////////////////////////////////////
     bool opgrip_success = move_gripper(1.0);
     
+
+
+    clear_constraint();
     target_pos_down = obj_loc;
     target_pos_down.position.z = 0.04 + 0.1;
     bool move_down_success = move_arm(target_pos_down, true);
@@ -261,18 +256,21 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose&
     
     
     target_pos_up = obj_loc;
-    target_pos_up.position.z = 0.5;
+    target_pos_up.position.z = 0.41;
     bool move_up_success = move_arm(target_pos_up, true);
     
     ///////////////////////////////////////////
     // Move to goal position
     ///////////////////////////////////////////
-    
+
+    // set_constraint();
+    set_z_constraint(0.4, 1.2);
     target_pos_down2.position = goal_loc;
-    target_pos_down2.position.z = 0.5;
+    target_pos_down2.position.z = 0.41;
     // clear_constraint();
     bool move_goal_success = move_arm(target_pos_down2);
     
+    clear_constraint();
     
     ///////////////////////////////////////////
     // Place the object
@@ -286,45 +284,14 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose&
     bool open_gripper_success = move_gripper(1.0);
     
     target_pos_up2.position = goal_loc;
-    target_pos_up2.position.z = 0.4;
+    target_pos_up2.position.z = 0.41;
     bool move_up_success2 = move_arm(target_pos_up2, true);
+
+    set_constraint();
        }
       
 
-void cw2::set_height_constraint(double min_height = 0.1) {
-  // 清除所有现有的约束
-  clear_constraint();
-  
-  // 创建位置约束
-  moveit_msgs::PositionConstraint position_constraint;
-  position_constraint.header.frame_id = "world"; // 或者您的基准坐标系
-  position_constraint.link_name = "panda_hand"; // 末端执行器链接名
-  
-  // 创建一个足够大的盒子，只限制z方向的下边界
-  shape_msgs::SolidPrimitive box;
-  box.type = shape_msgs::SolidPrimitive::BOX;
-  box.dimensions.resize(3);
-  box.dimensions[0] = 2.0; // x方向足够大
-  box.dimensions[1] = 2.0; // y方向足够大
-  box.dimensions[2] = 2.0; // z方向高度
-  
-  // 设置盒子位置，使其底部边界在min_height处
-  geometry_msgs::Pose box_pose;
-  box_pose.position.x = 0.0;
-  box_pose.position.y = 0.0;
-  box_pose.position.z = min_height + box.dimensions[2]/2.0;
-  box_pose.orientation.w = 1.0;
-  
-  position_constraint.constraint_region.primitives.push_back(box);
-  position_constraint.constraint_region.primitive_poses.push_back(box_pose);
-  position_constraint.weight = 1.0;
-  
-  // 将位置约束添加到约束集合
-  constraints_.position_constraints.push_back(position_constraint);
-  
-  // 应用约束
-  arm_group_.setPathConstraints(constraints_);
-}
+
 
 void cw2::set_constraint() {
     joint_constraints_[0].joint_name = "panda_joint1";
@@ -374,13 +341,14 @@ void cw2::set_constraint() {
     joint_constraints_[6].weight = 1.0;
   
     // constraints.joint_constraints.push_back(joint_constraints_[0]);
-    constraints_.joint_constraints.push_back(joint_constraints_[1]);
-    constraints_.joint_constraints.push_back(joint_constraints_[2]);
-    constraints_.joint_constraints.push_back(joint_constraints_[3]);
-    constraints_.joint_constraints.push_back(joint_constraints_[4]);
+    // constraints_.joint_constraints.push_back(joint_constraints_[1]);
+    // constraints_.joint_constraints.push_back(joint_constraints_[2]);
+    // constraints_.joint_constraints.push_back(joint_constraints_[3]);
+    constraints_.joint_constraints.push_back(joint_constraints_[4]);        ////////5号关节限制运动
     // constraints.joint_constraints.push_back(joint_constraints_[5]);
     // constraints.joint_constraints.push_back(joint_constraints_[6]);
     arm_group_.setPathConstraints(constraints_);
+
   }
   
   void cw2::clear_constraint() {
@@ -473,4 +441,96 @@ ROS_INFO("Nought offset: [x: %f, y: %f] (angle: %f deg)", offset_x, offset_y, ro
 // 应用计算出的偏移量
 target_pose.position.x += offset_x;
 target_pose.position.y += offset_y;
+}
+
+
+
+/**
+ * 设置末端执行器Z轴高度的上下限制
+ * @param min_height Z轴最小高度（米）
+ * @param max_height Z轴最大高度（米）
+ */
+void cw2::set_z_constraint(double min_height, double max_height) {
+  // 清除现有的约束（可选，取决于您是否想保留其他约束）
+  moveit_msgs::Constraints temp_constraints = constraints_; // 保存当前约束
+  constraints_.position_constraints.clear();  // 仅清除位置约束
+  
+  // 创建盒子形状来表示允许的区域
+  shape_msgs::SolidPrimitive box;
+  box.type = shape_msgs::SolidPrimitive::BOX;
+  box.dimensions.resize(3);
+  box.dimensions[0] = 2.0;  // x方向很大，不限制
+  box.dimensions[1] = 2.0;  // y方向很大，不限制
+  box.dimensions[2] = max_height - min_height;  // z方向限制范围
+  
+  // 设置盒子位置，中心在z=(min_height+max_height)/2处
+  geometry_msgs::Pose box_pose;
+  box_pose.position.x = 0.0;
+  box_pose.position.y = 0.0;
+  box_pose.position.z = (min_height + max_height) / 2.0;
+  box_pose.orientation.w = 1.0;
+  
+  // 创建位置约束
+  moveit_msgs::PositionConstraint pos_constraint;
+  pos_constraint.header.frame_id = "world";  // 基准坐标系
+  pos_constraint.link_name = "panda_link7";      // 末端执行器的链接名称
+  
+  // 设置约束区域
+  pos_constraint.constraint_region.primitives.push_back(box);
+  pos_constraint.constraint_region.primitive_poses.push_back(box_pose);
+  pos_constraint.weight = 1.0;
+  
+  // 将位置约束添加到约束集合中
+  constraints_.position_constraints.push_back(pos_constraint);
+  
+  // 恢复关节约束（如果有的话）
+  constraints_.joint_constraints = temp_constraints.joint_constraints;
+  
+  // 应用所有约束
+  arm_group_.setPathConstraints(constraints_);
+  
+  ROS_INFO("Set Z-axis constraint: min=%.2f, max=%.2f", min_height, max_height);
+}
+
+
+
+bool cw2::reset_arm(double min_height, double target_height)
+{
+  clear_constraint();
+  // 获取当前机械臂位置
+  geometry_msgs::PoseStamped current_pose = arm_group_.getCurrentPose();
+  double current_z = current_pose.pose.position.z;
+  
+  // 检查当前高度是否低于最小值
+  if (current_z < min_height) {
+    ROS_INFO("Current arm height (%.3f) is below minimum (%.3f), adjusting to %.3f", 
+             current_z, min_height, target_height);
+    
+    // 创建新的目标位置
+    geometry_msgs::Pose target_pose = current_pose.pose;
+    target_pose.position.z = target_height;
+    
+    // 设置目标位置
+    arm_group_.setPoseTarget(target_pose);
+    
+    // 规划并执行移动
+    moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+    bool success = (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+    
+    if (success) {
+      ROS_INFO("Planning successful, executing movement to safe height");
+      arm_group_.execute(my_plan);
+      return true;
+    } else {
+      ROS_WARN("Failed to plan movement to safe height");
+      return false;
+    }
+  } else {
+    // 如果高度已经安全，无需调整
+    ROS_INFO("Arm height (%.3f) is already above minimum (%.3f), no adjustment needed", 
+             current_z, min_height);
+    return true;
+  }
+
+  set_z_constraint(0.4, 1.2); // 恢复Z轴约束
 }

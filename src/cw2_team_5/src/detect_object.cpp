@@ -703,16 +703,43 @@ bool checkBasket(
 
 
 
-void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::vector<ShapeDetectionResult>& detected_objects) {
+void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::vector<ShapeDetectionResult>& detected_objects, 
+                    std::vector<Obstacle>& obstacles){
     // 清空检测结果列表
     detected_objects.clear();
 
-
-    // 清空./temp文件夹
+///////////////////////////////// C++17
+    // 在detect_objects函数中清空./temp文件夹的代码部分
+    // 清空./temp文件夹或在不存在时创建
     std::string temp_folder_path = "./temp";
+    boost::filesystem::path dir(temp_folder_path);
+
     for (const auto& entry : std::filesystem::directory_iterator(temp_folder_path)) {
       std::filesystem::remove_all(entry.path());
     }
+//////////////////////////////////
+
+    //////////////////////////////////////////////
+    // 检查文件夹是否存在，不存在就创建
+    // if (!boost::filesystem::exists(dir)) {
+    //   ROS_INFO("Temp folder does not exist, creating: %s", temp_folder_path.c_str());
+    //   boost::system::error_code ec;
+    //   if (boost::filesystem::create_directory(dir, ec)) {
+    //     ROS_INFO("Successfully created temp folder");
+    //   } else {
+    //     ROS_ERROR("Failed to create temp folder: %s", ec.message().c_str());
+    //   }
+    // } else {
+    //   // 文件夹存在，清空其中内容
+    //   boost::filesystem::directory_iterator end_itr;
+    //   for (boost::filesystem::directory_iterator itr(dir); itr != end_itr; ++itr) {
+    //     boost::filesystem::remove_all(itr->path());
+    //   }
+    //   ROS_INFO("Cleared existing temp folder contents");
+    // }
+
+  /////////////////////////////////////////////
+
 
     bool have_basket = false;
     
@@ -767,7 +794,7 @@ void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::
         }
         
         // 检查是否是其他形状
-        if (isValidObjectCluster(cluster, dims)) {
+        if (isValidObjectCluster(cluster, dims, obstacles)) {
             // 形状识别
             ShapeDetectionResult detection_result = detectShapeRotation_multi(cluster);
             if (detection_result.overlap_score < 2) {
@@ -781,7 +808,7 @@ void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::
         }
     }
     
-    ROS_INFO("Detected %zu objects", detected_objects.size());
+    ROS_INFO("Detected %zu objects", detected_objects.size() - 1);
 }
 
 // 点云聚类函数
@@ -835,7 +862,7 @@ void clusterPointCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud,
 }
 
 // 判断聚类是否是有效的对象聚类
-bool isValidObjectCluster(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cluster, const Eigen::Vector3f& dims) {
+bool isValidObjectCluster(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cluster, const Eigen::Vector3f& dims, std::vector<Obstacle>& obstacles) {
     // 检查颜色一致性
     uint8_t r_min = 255, r_max = 0, g_min = 255, g_max = 0, b_min = 255, b_max = 0;
     
@@ -901,8 +928,42 @@ bool isValidObjectCluster(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cluster, cons
     }
     
     if (r < 25 && g < 25 && b < 25) {
-        ROS_INFO("Skipping black color cluster");
-        return false;
+    // 记录黑色障碍物的点云信息
+    pcl::PointXYZRGBA min_pt, max_pt;
+    pcl::getMinMax3D(*cluster, min_pt, max_pt);
+    
+    // 创建障碍物结构体
+    Obstacle obstacle_data;
+    
+    // 设置障碍物几何形状
+    obstacle_data.obstacle.type = shape_msgs::SolidPrimitive::BOX;
+    obstacle_data.obstacle.dimensions.resize(3);
+    obstacle_data.obstacle.dimensions[shape_msgs::SolidPrimitive::BOX_X] = max_pt.x - min_pt.x;
+    obstacle_data.obstacle.dimensions[shape_msgs::SolidPrimitive::BOX_Y] = max_pt.y - min_pt.y;
+    obstacle_data.obstacle.dimensions[shape_msgs::SolidPrimitive::BOX_Z] = max_pt.z - min_pt.z;
+    
+    // 计算障碍物中心点
+    Eigen::Vector4f centroid;
+    pcl::compute3DCentroid(*cluster, centroid);
+    
+    // 设置障碍物姿态
+    obstacle_data.obstacle_pose.position.x = centroid[0];
+    obstacle_data.obstacle_pose.position.y = centroid[1];
+    obstacle_data.obstacle_pose.position.z = centroid[2];
+    obstacle_data.obstacle_pose.orientation.w = 1.0; // 默认方向(无旋转)
+    
+    // 将障碍物数据添加到向量中
+    obstacles.push_back(obstacle_data);
+    
+    ROS_INFO("Black obstacle detected. Dimensions: x=%.3f, y=%.3f, z=%.3f at position (%.3f, %.3f, %.3f)",
+             obstacle_data.obstacle.dimensions[0], 
+             obstacle_data.obstacle.dimensions[1], 
+             obstacle_data.obstacle.dimensions[2],
+             obstacle_data.obstacle_pose.position.x,
+             obstacle_data.obstacle_pose.position.y,
+             obstacle_data.obstacle_pose.position.z);
+    
+    return false;
     }
     
     if (g > 100) {
@@ -918,3 +979,6 @@ bool isValidObjectCluster(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cluster, cons
 
     return true;
 }
+
+
+

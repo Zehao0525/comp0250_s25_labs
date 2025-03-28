@@ -38,7 +38,7 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
   cw2_world_spawner::Task1Service::Response &response) 
 {
   /* function which should solve task 1 */
-
+  reset_arm();
   ROS_INFO("The coursework solving callback for task 1 has been triggered");
 
   geometry_msgs::PointStamped object_point = request.object_point;
@@ -55,10 +55,12 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
   target_pose.position.z = 0.5;
 
 
-  set_constraint();
+  // set_constraint();
+  // clear_constraint();
+  
   bool mvstate = move_arm(target_pose);
   ROS_INFO("Move state: %d", mvstate);
-
+  set_z_constraint(0.4, 1.2);
 
 
   DetectedObject detected_object;
@@ -98,12 +100,11 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
 
 
 
-  target_pose.position.z = 0.25;
+  target_pose.position.z = 0.41;
 
 
   bool mvstate1 = move_arm(target_pose);
   ROS_INFO("Move state: %d", mvstate1);
-
 
 
 
@@ -112,9 +113,7 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
   goal_pose.position.z = 0.2;
 
 
-
   pick_and_place(shape_type, target_pose,  goal_pose.position);
-
 
   return true;
 }
@@ -127,7 +126,9 @@ cw2::t2_callback(cw2_world_spawner::Task2Service::Request &request,
   cw2_world_spawner::Task2Service::Response &response)
 {
   /* function which should solve task 2 */
-  set_constraint();
+  // set_constraint();
+  reset_arm();
+  set_z_constraint(0.4, 1.2);
 
   // decoder
   std::vector<geometry_msgs::Point> ref_object_points;
@@ -265,13 +266,17 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
   /* function which should solve task 3 */
 
   ROS_INFO("The coursework solving callback for task 3 has been triggered");
-  // reset_arm();
-  set_constraint();
+  reset_arm();
+  // set_constraint();
+
+
 
 
   combined_cloud.reset(new pcl::PointCloud<pcl::PointXYZRGBA>);
-  
+  set_z_constraint(0.4, 1.2);
   combined_cloud = scanPlatform();
+  // clear_constraint();
+  // set_constraint();
 
 
   // 1. 点云下采样 - 使用VoxelGrid滤波器减少点数量
@@ -295,7 +300,18 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
   
   // 检测物体
   std::vector<ShapeDetectionResult> detected_objects;
-  detect_objects(cloud_filtered_3, detected_objects);
+
+  clearObstacles();
+  detect_objects(cloud_filtered_3, detected_objects, obstacles_);
+
+  if (obstacles_.size() > 0) {
+    ROS_INFO("Detected %zu obstacles", obstacles_.size());
+    for (const auto& obstacle : obstacles_) {
+      addObstacle(obstacle);
+    }
+  } else {
+    ROS_INFO("No obstacles detected");
+  }
   
   // 转换函数：将ShapeDetectionResult转换为DetectedObject
   auto convertToDetectedObject = [](const ShapeDetectionResult& result) -> DetectedObject {
@@ -384,4 +400,41 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
   
   return true;
 
+}
+
+
+
+void cw2::addObstacle(const Obstacle& obstacle) {
+  
+  // 创建碰撞对象
+  moveit_msgs::CollisionObject collision_object;
+  collision_object.header.frame_id = "world";
+  collision_object.id = "obstacle_" + std::to_string(obstacles_.size());
+  
+  // 直接使用obstacle中已定义的primitive和pose
+  collision_object.primitives.push_back(obstacle.obstacle);
+  collision_object.primitive_poses.push_back(obstacle.obstacle_pose);
+  collision_object.operation = collision_object.ADD;
+  
+  // 将碰撞对象添加到规划场景
+  planning_scene_interface_.applyCollisionObject(collision_object);
+  
+  ROS_INFO("Added obstacle at [x: %f, y: %f, z: %f]", 
+           obstacle.obstacle_pose.position.x, 
+           obstacle.obstacle_pose.position.y, 
+           obstacle.obstacle_pose.position.z);
+}
+
+void cw2::clearObstacles() {
+  // 清除所有障碍物
+  obstacles_.clear();
+  
+  // 从规划场景中移除所有障碍物
+  std::vector<std::string> object_ids;
+  for(size_t i = 0; i < obstacles_.size(); i++) {
+    object_ids.push_back("obstacle_" + std::to_string(i+1));
+  }
+  planning_scene_interface_.removeCollisionObjects(object_ids);
+  
+  ROS_INFO("Cleared all obstacles");
 }

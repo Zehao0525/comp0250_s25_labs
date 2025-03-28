@@ -65,7 +65,7 @@ if __name__ == "__main__":
     # task3_scan_result.pcd
     pcd_file = "task3_scan_result1.pcd"
     # pcd_file = "cluster.pcd"
-    pcd_file = "./temp/cluster16.pcd"
+    pcd_file = "./temp/cluster17.pcd"
 
 
     visualize_pcd_with_axes(pcd_file)
