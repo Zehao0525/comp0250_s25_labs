@@ -36,15 +36,6 @@ bool enforce_color_similarity(const pcl::PointXYZRGBA& a, const pcl::PointXYZRGB
 
 
 
-//   void merge_clouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr new_cloud) {
-//     std::lock_guard<std::mutex> lock(cloud_mutex);
-//     if (combined_cloud->empty()) {
-//         *combined_cloud = *new_cloud;
-//     } else {
-//         *combined_cloud += *new_cloud;
-//     }
-// }
-
 /**
  * 从主点云中移除另一个点云的点
  * @param cloud_main 主点云，将被修改
