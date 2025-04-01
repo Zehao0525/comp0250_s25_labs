@@ -47,16 +47,67 @@ int main(int argc, char** argv) {
     detect_objects(cloud_filtered, detected_objects, obstacles);
     
     // 显示检测结果
-    std::cout << "\n检测到 " << detected_objects.size() << " 个物体:" << std::endl;
+    std::cout << "\nDetected " << detected_objects.size() << " objects:" << std::endl;
     for (size_t i = 0; i < detected_objects.size(); i++) {
         const auto& obj = detected_objects[i];
-        // std::cout << "物体 #" << i+1 << ":" << std::endl;
-        // std::cout << "  类型: " << obj.type << std::endl;
-        // std::cout << "  位置: [" << obj.position.x << ", " << obj.position.y << ", " << obj.position.z << "]" << std::endl;
-        // std::cout << "  尺寸: [" << obj.w << ", " << obj.l << ", " << obj.h << "]" << std::endl;
-        // std::cout << "  颜色: [R:" << (int)obj.r << ", G:" << (int)obj.g << ", B:" << (int)obj.b << "]" << std::endl;
+        std::cout << "Object #" << i+1 << ":" << std::endl;
+        std::cout << "  Type: " << obj.shape_type << std::endl;
+        std::cout << "  Rotation angle: " << obj.rotation_angle << " degrees" << std::endl;
+        std::cout << "  Size: " << obj.size << std::endl;
+        std::cout << "  Position: [" << obj.centroid[0] << ", " << obj.centroid[1] << ", " << obj.centroid[2] << "]" << std::endl;
+        std::cout << "  Overlap score: " << obj.overlap_score << std::endl;
+        std::cout << "  Color: [R:" << static_cast<int>(obj.r) << ", G:" << static_cast<int>(obj.g) << ", B:" << static_cast<int>(obj.b) << "]" << std::endl;
         std::cout << std::endl;
     }
+
+    // 添加：打印障碍物信息
+std::cout << "\nObstacles detected: " << obstacles.size() << std::endl;
+for (size_t i = 0; i < obstacles.size(); i++) {
+    const auto& obstacle = obstacles[i];
+    std::cout << "Obstacle #" << i+1 << ":" << std::endl;
+    
+    // 打印形状类型
+    std::cout << "  Shape type: ";
+    switch(obstacle.obstacle.type) {
+        case shape_msgs::SolidPrimitive::BOX:
+            std::cout << "BOX" << std::endl;
+            std::cout << "  Dimensions: [" 
+                      << obstacle.obstacle.dimensions[shape_msgs::SolidPrimitive::BOX_X] << ", "
+                      << obstacle.obstacle.dimensions[shape_msgs::SolidPrimitive::BOX_Y] << ", "
+                      << obstacle.obstacle.dimensions[shape_msgs::SolidPrimitive::BOX_Z] << "]" << std::endl;
+            break;
+        case shape_msgs::SolidPrimitive::SPHERE:
+            std::cout << "SPHERE" << std::endl;
+            std::cout << "  Radius: " << obstacle.obstacle.dimensions[shape_msgs::SolidPrimitive::SPHERE_RADIUS] << std::endl;
+            break;
+        case shape_msgs::SolidPrimitive::CYLINDER:
+            std::cout << "CYLINDER" << std::endl;
+            std::cout << "  Height: " << obstacle.obstacle.dimensions[shape_msgs::SolidPrimitive::CYLINDER_HEIGHT] << std::endl;
+            std::cout << "  Radius: " << obstacle.obstacle.dimensions[shape_msgs::SolidPrimitive::CYLINDER_RADIUS] << std::endl;
+            break;
+        case shape_msgs::SolidPrimitive::CONE:
+            std::cout << "CONE" << std::endl;
+            std::cout << "  Height: " << obstacle.obstacle.dimensions[shape_msgs::SolidPrimitive::CONE_HEIGHT] << std::endl;
+            std::cout << "  Radius: " << obstacle.obstacle.dimensions[shape_msgs::SolidPrimitive::CONE_RADIUS] << std::endl;
+            break;
+        default:
+            std::cout << "UNKNOWN (" << obstacle.obstacle.type << ")" << std::endl;
+    }
+    
+    // 打印位置和方向
+    std::cout << "  Position: [" 
+              << obstacle.obstacle_pose.position.x << ", "
+              << obstacle.obstacle_pose.position.y << ", "
+              << obstacle.obstacle_pose.position.z << "]" << std::endl;
+    
+    std::cout << "  Orientation: [" 
+              << obstacle.obstacle_pose.orientation.x << ", "
+              << obstacle.obstacle_pose.orientation.y << ", "
+              << obstacle.obstacle_pose.orientation.z << ", "
+              << obstacle.obstacle_pose.orientation.w << "]" << std::endl;
+    
+    std::cout << std::endl;
+}
     
     return 0;
 }

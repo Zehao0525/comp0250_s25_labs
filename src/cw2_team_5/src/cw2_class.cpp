@@ -250,8 +250,8 @@ cw2::t2_callback(cw2_world_spawner::Task2Service::Request &request,
    match_idx = 0;
  }
  
- response.mystery_object_num = match_idx;
- ROS_INFO("Task 2 complete: Mystery object matches reference object %zu", match_idx);
+ response.mystery_object_num = match_idx + 1;
+ ROS_INFO("Task 2 complete: Mystery object matches reference object %zu", match_idx + 1);
   return true;
 
 }
@@ -302,7 +302,7 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
   std::vector<ShapeDetectionResult> detected_objects;
 
   clearObstacles();
-  detect_objects(cloud_filtered_3, detected_objects, obstacles_);
+  detect_objects(cloud_filtered_3, detected_objects, obstacles_); //识别到的坐标没有转回到世界坐标系
 
   if (obstacles_.size() > 0) {
     ROS_INFO("Detected %zu obstacles", obstacles_.size());
@@ -313,60 +313,33 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
     ROS_INFO("No obstacles detected");
   }
   
-  // 转换函数：将ShapeDetectionResult转换为DetectedObject
-  auto convertToDetectedObject = [](const ShapeDetectionResult& result) -> DetectedObject {
-    DetectedObject obj;
-    obj.type = result.shape_type;
-    
-    // 从centroid转换位置
-    obj.position.x = result.centroid[0];
-    obj.position.y = result.centroid[1];
-    obj.position.z = result.centroid[2];
-    
-    // 设置尺寸（简单估计）
-    obj.w = result.size;
-    obj.l = result.size;
-    obj.h = result.size;
-    
-    // 默认颜色
-    obj.r = 128; // 为了兼容性，我们设置默认颜色值
-    obj.g = 128;
-    obj.b = 128;
-    
-    return obj;
-  };
-  
-  // 转换检测结果
-  std::vector<DetectedObject> converted_objects;
-  for (const auto& result : detected_objects) {
-    converted_objects.push_back(convertToDetectedObject(result));
-    
-    // 输出检测结果信息
-    ROS_INFO("Detected object: %s", result.shape_type.c_str());
-    ROS_INFO("Position: [x: %f, y: %f, z: %f]", 
-             result.centroid[0], result.centroid[1], result.centroid[2]);
-    ROS_INFO("Size: %f, Overlap score: %f", result.size, result.overlap_score);
-  }
   
   // 处理结果
   response.total_num_shapes = detected_objects.size() - 1; // 排除篮子
-  DetectedObject picked_object, candidate_cross, candidate_nought, candidate_basket;
+  ShapeDetectionResult picked_object, candidate_cross, candidate_nought, candidate_basket;
   int cross_count = 0;
   int nought_count = 0;
+  float size_c = 0.02;
+  float size_n = 0.02;
   
-  // 使用转换后的DetectedObject处理
-  for (const auto& obj : converted_objects) {
-    if (obj.type == "cross") {
+  // 使用转换后的DetectedObject处理， 选择大的cross和nought方便夹取
+  for (const auto& obj : detected_objects) {
+    if (obj.shape_type == "cross") {
       cross_count++;
-      candidate_cross = obj;
-    } else if (obj.type == "nought") {
+      if (obj.size >= size_c) {
+        size_c = obj.size;
+        candidate_cross = obj;
+      }
+    } else if (obj.shape_type == "nought") {
       nought_count++;
-      candidate_nought = obj;
-    } else if (obj.type == "basket") {
+      if (obj.size >= size_n) {
+        size_n = obj.size;
+        candidate_nought = obj;
+      }
+    } else if (obj.shape_type == "basket") {
       candidate_basket = obj;
     }
   }
-  
   // 确定要拾取的物体
   if (cross_count > nought_count) {
     response.num_most_common_shape = cross_count;
@@ -385,16 +358,39 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
     picked_object = candidate_nought;
   }
   
-  // 执行抓取和放置
   // 对位置进行调整以提高抓取成功率
-  if (picked_object.type == "cross") { 
-    picked_object.position.x += 0.05; 
-  } else if (picked_object.type == "nought") { 
-    picked_object.position.y += 0.08; 
+  if (picked_object.shape_type == "cross") { 
+    picked_object.centroid[0] += 0.05; 
+  } else if (picked_object.shape_type == "nought") { 
+    picked_object.centroid[1]+= 0.08; 
   }
+
+  geometry_msgs::Pose grasp_pose;
+  grasp_pose.position.x = picked_object.centroid[0];
+  grasp_pose.position.y = picked_object.centroid[1];
+  grasp_pose.position.z = 0.41; // 设置z轴高度
+
+  // 执行抓取和放置
+  adjustPoseByShapeAndRotation(grasp_pose, picked_object.shape_type, picked_object.rotation_angle);
+
+
+
   
-  // 执行抓取和放置操作
-  pick_and_place(picked_object.type, picked_object.position, candidate_basket.position);
+  Init_Pose temp_pose;
+  temp_pose.position.x = picked_object.centroid[0];
+  temp_pose.position.y = picked_object.centroid[1];
+  temp_pose.position.z = 0.41; // 设置z轴高度
+
+  move_arm(temp_pose);
+
+
+  // 执行抓取和放置操作   检测准确度依然不够
+  geometry_msgs::Point candidate_basket_point;
+  candidate_basket_point.x = candidate_basket.centroid[0];
+  candidate_basket_point.y = candidate_basket.centroid[1];
+  candidate_basket_point.z = 0.2; // 设置z轴高度
+  pick_and_place(picked_object.shape_type, temp_pose.position, candidate_basket_point);
+
   
   ROS_INFO("Task 3 complete");
   
@@ -437,4 +433,64 @@ void cw2::clearObstacles() {
   planning_scene_interface_.removeCollisionObjects(object_ids);
   
   ROS_INFO("Cleared all obstacles");
+}
+
+// 检查轨迹时间戳是否严格递增
+// 检查并修复轨迹时间戳
+// 检查并修复轨迹时间戳
+void cw2::checkTrajectoryTimestamps(moveit_msgs::RobotTrajectory& trajectory) {
+  if (trajectory.joint_trajectory.points.empty()) {
+    ROS_WARN("Empty trajectory, no points to check");
+    return;
+  }
+  
+  bool needs_fixing = false;
+  double last_time = -1.0;
+  
+  ROS_INFO("Checking trajectory timestamps (total points: %zu):", trajectory.joint_trajectory.points.size());
+  for (size_t i = 0; i < trajectory.joint_trajectory.points.size(); ++i) {
+    double current_time = trajectory.joint_trajectory.points[i].time_from_start.toSec();
+    
+    if (i > 0) {
+      double time_diff = current_time - last_time;
+      if (time_diff <= 0.0) {
+        ROS_ERROR("  Point[%zu]: time=%.6f, interval=%.6f (invalid!)", i, current_time, time_diff);
+        needs_fixing = true;
+      } else {
+        ROS_INFO("  Point[%zu]: time=%.6f, interval=%.6f", i, current_time, time_diff);
+      }
+    } else {
+      ROS_INFO("  Point[%zu]: time=%.6f", i, current_time);
+    }
+    
+    last_time = current_time;
+  }
+  
+  // 如果需要修复时间戳
+  if (needs_fixing) {
+    ROS_WARN("Timestamp issues detected, performing automatic fix");
+    
+    // 最小时间步长（10毫秒）
+    const double min_time_step = 0.01;
+    
+    // 从0开始，确保严格递增
+    for (size_t i = 0; i < trajectory.joint_trajectory.points.size(); ++i) {
+      double new_time = i * min_time_step;
+      trajectory.joint_trajectory.points[i].time_from_start = ros::Duration(new_time);
+    }
+    
+    // 再次检查修复后的时间戳
+    ROS_INFO("Timestamps after fixing:");
+    last_time = -1.0;
+    for (size_t i = 0; i < trajectory.joint_trajectory.points.size(); ++i) {
+      double current_time = trajectory.joint_trajectory.points[i].time_from_start.toSec();
+      if (i > 0) {
+        ROS_INFO("  Point[%zu]: time=%.6f, interval=%.6f", 
+                 i, current_time, current_time - last_time);
+      } else {
+        ROS_INFO("  Point[%zu]: time=%.6f", i, current_time);
+      }
+      last_time = current_time;
+    }
+  }
 }

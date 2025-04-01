@@ -5,50 +5,6 @@
 #include <moveit/robot_trajectory/robot_trajectory.h>
 
 
-
-// bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recursion_depth) {
-//   ROS_INFO("Setting pose target.");
-//   arm_group_.setPoseTarget(target_pose);
-
-//   moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-//   bool plan_success = false;
-//   bool exec_success = false;
-
-//   int attempts = 0;
-//   const int max_attempts = 2;
-
-//   while ((!plan_success || !exec_success) && attempts < max_attempts) {
-//     ROS_INFO("Planning attempt %d...", attempts + 1);
-//     plan_success = (arm_group_.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-    
-//     attempts++;
-//     if (!plan_success) {
-//       continue;
-//     }
-    
-//     auto exec_result = arm_group_.execute(my_plan);
-//     exec_success = exec_result == moveit::planning_interface::MoveItErrorCode::SUCCESS;
-//     // We wil take time_outs, cause otherwise it will never fcking reach the goals
-//     exec_success = exec_success || (exec_result == moveit::planning_interface::MoveItErrorCode::TIMED_OUT);
-    
-//     if(exec_success) {
-//       break;
-//     }
-//   }
-  
-//   if (!plan_success || !exec_success) {
-//     ROS_WARN("Plan failed will try unlocking the constraints");
-//     clear_constraint();
-//     set_constraint();
-//     move_arm(target_pose, use_cartesian, recursion_depth + 1);
-
-//   }
-  
-//   return true;
-// }
-
-
-
 bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recursion_depth) {
   // 递归深度限制，防止无限递归
   const int max_recursion_depth = 3;
@@ -106,6 +62,25 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
 
       ///////////////////////////////////////////////
 
+
+    // 检查优化后的轨迹
+    ROS_INFO("checking trajectory timestamps...");
+    checkTrajectoryTimestamps(my_plan.trajectory_);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      ///////////////////////////////////
 
       // 执行计划
       ROS_INFO("Executing Cartesian path plan...");
@@ -241,7 +216,7 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose&
     
     ///////////////////////////////////////////
     // initial position
-    ///////////////////////////////////////////
+    ///////////////////////////////////////////  这里应该移动到目标的正上方
     bool opgrip_success = move_gripper(1.0);
     
 
@@ -392,14 +367,6 @@ void cw2::set_constraint() {
     return success;
   }
   
-
-inline double random_double(double min, double max) {
-  std::random_device rd;
-  std::mt19937 gen(rd());  // 随机种子
-  std::uniform_real_distribution<> dist(min, max);  // 均匀分布
-  double r = dist(gen);
-  return r;
-}
 
 
 

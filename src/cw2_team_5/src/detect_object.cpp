@@ -3,215 +3,6 @@
 std::mutex result_mutex;
 
 
-// void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::vector<ShapeDetectionResult>& detected_objects) {
-//     // 清空检测结果列表
-//     detected_objects.clear();
-//     bool have_basket = false;
-    
-//     // 使用拷贝的点云，以便在循环中可以修改它
-//     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr working_cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-//     *working_cloud = *in_cloud_ptr;
-    
-//     // 持续检测物体，直到无法找到更多物体为止
-//     while (working_cloud->points.size() > 1000) {  // 最小聚类大小
-//         // --- 1. 点云聚类 ---
-//         pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGBA>);
-//         tree->setInputCloud(working_cloud);
-        
-//         std::vector<pcl::PointIndices> cluster_indices;
-//         pcl::ConditionalEuclideanClustering<pcl::PointXYZRGBA> cec(true);   // 'true' 允许聚类大小过滤
-//         cec.setInputCloud(working_cloud);
-//         cec.setConditionFunction(&enforce_color_similarity);
-//         cec.setClusterTolerance(0.005f);          // 2cm空间聚类半径
-//         cec.setMinClusterSize(1000);  
-//         cec.setSearchMethod(tree); 
-        
-//         // 执行聚类
-//         cec.segment(cluster_indices);
-        
-//         // 如果没有找到更多聚类，退出循环
-//         if (cluster_indices.empty()) {
-//             break;
-//         }
-
-//         // 按照聚类的点云数量排序（从大到小）
-//         std::sort(cluster_indices.begin(), cluster_indices.end(), 
-//             [](const pcl::PointIndices& a, const pcl::PointIndices& b) {
-//                 return a.indices.size() > b.indices.size();
-//             });
-
-//         bool found_object = false;
-
-//         // 保留前10个聚类（如果有10个以上）
-//         // if (cluster_indices.size() > 15) {
-//         //     cluster_indices.resize(15);
-//         // }
-
-        
-//         // --- 2. 处理每个聚类 ---
-//         for (size_t i = 0; i < cluster_indices.size(); ++i)
-//          {
-//             const auto &indices = cluster_indices[i];
-//             // 为当前聚类创建新的点云
-//             pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZRGBA>);
-//             for (const auto &idx : indices.indices) {
-//                 cluster->points.push_back(working_cloud->points[idx]);
-//             }
-
-//             cluster->width = cluster->points.size();
-//             cluster->height = 1;
-//             cluster->is_dense = true;
-
-//             // 计算轴向边界框
-//             pcl::PointXYZRGBA min_pt, max_pt;
-//             pcl::getMinMax3D(*cluster, min_pt, max_pt);
-      
-//             Eigen::Vector3f dims(1.0f, 2.0f, 3.0f);
-//             dims[0] = std::fabs(max_pt.x - min_pt.x);
-//             dims[1] = std::fabs(max_pt.y - min_pt.y);
-//             dims[2] = std::fabs(max_pt.z - min_pt.z);
-
-
-
-//               // 计算聚类中心
-//             Eigen::Vector4f cluster_centroid;
-//             pcl::compute3DCentroid(*cluster, cluster_centroid);
-
-//               /// save the point cloud to a file
-//               /////////////////////////////////////////////////
-//               pcl::io::savePCDFileASCII("cluster.pcd", *cluster);
-//               /////////////////////////////////////////////////
-      
-//             geometry_msgs::Point object_point;
-//             object_point.x = cluster_centroid[0];
-//             object_point.y = cluster_centroid[1];
-//             object_point.z = cluster_centroid[2];
-
-
-
-
-
-
-
-//             if (!have_basket) { // 仅仅保留第一个检测到的篮子 最大的篮子
-//               // --- 3. 检测篮子 ---
-//               bool is_basket = checkBasket(cluster, dims, object_point, working_cloud, detected_objects);
-//               if (is_basket) {
-//                   found_object = true;
-//                   have_basket = true;
-//                   continue; // 跳到下一个聚类
-//               }
-//             }
-
-
-
-//             ////////////////////检查颜色绝对值
-
-//                 // 检查颜色一致性
-//               uint8_t r_min = 255, r_max = 0, g_min = 255, g_max = 0, b_min = 255, b_max = 0;
-              
-//               // 查找颜色最大值和最小值
-//               for (int j = 0; j < cluster->points.size(); j++) {
-//                   uint32_t rgba = cluster->points[j].rgba;
-//                   uint8_t r = (rgba >> 16) & 0x0000ff;
-//                   uint8_t g = (rgba >> 8) & 0x0000ff;
-//                   uint8_t b = rgba & 0x0000ff;
-                  
-//                   r_min = std::min(r_min, r);
-//                   r_max = std::max(r_max, r);
-//                   g_min = std::min(g_min, g);
-//                   g_max = std::max(g_max, g);
-//                   b_min = std::min(b_min, b);
-//                   b_max = std::max(b_max, b);
-//               }
-              
-//               // 计算最大颜色差异
-//               uint8_t r_diff = r_max - r_min;
-//               uint8_t g_diff = g_max - g_min;
-//               uint8_t b_diff = b_max - b_min;
-              
-//               // 如果颜色差异过大，跳过该聚类
-//               const uint8_t color_variance_threshold = 150; // 可调整的阈值
-//               if (r_diff > color_variance_threshold || 
-//                   g_diff > color_variance_threshold || 
-//                   b_diff > color_variance_threshold) {
-//                   ROS_INFO("jump large change color: R[%d-%d], G[%d-%d], B[%d-%d]", 
-//                           r_min, r_max, g_min, g_max, b_min, b_max);
-//                   continue; // 直接处理下一个聚类
-//               }
-
-//               /////////////////////////
-
-
-
-
-
-//               // 输出每个聚类的平均rgb
-//               int r = 0, g = 0, b = 0;
-//               for (int j = 0; j < cluster->points.size(); j++) {
-//                   uint32_t rgba = cluster->points[j].rgba;
-//                   uint8_t uint8_r = (rgba >> 16) & 0x0000ff;
-//                   uint8_t uint8_g = (rgba >> 8) & 0x0000ff;
-//                   uint8_t uint8_b = (rgba) & 0x0000ff;
-//                   uint8_t uint8_a = (rgba >> 24) & 0x000000ff;
-
-//                   r += uint8_r;
-//                   g += uint8_g;
-//                   b += uint8_b;
-//               }
-//               r = r / cluster->points.size();
-//               g = g / cluster->points.size();
-//               b = b / cluster->points.size();
-
-//               ROS_INFO("average color: R: %d, G: %d, B: %d", r, g, b);
-
-
-
-//             // 添加尺寸阈值判断，跳过过大的聚类
-//             const float max_size_threshold = 0.25f; // 设置最大尺寸阈值（单位：米）
-//             if (dims[0] > max_size_threshold || dims[1] > max_size_threshold) {
-//                 ROS_INFO("jump: dim %.3f x %.3f x %.3f", dims[0], dims[1], dims[2]);
-//                 continue; // 直接处理下一个聚类
-//             }      
-
-
-//             if (r > 145 && r < 155 && g > 145 && g < 155 && b > 145 && b < 155) {
-//               ROS_INFO("skip gray color");
-//               continue;
-//             }
-
-//             if (r < 25 && g < 25 && b < 25) {
-//               ROS_INFO("skip black color");
-//               continue;
-//             }
-
-//             if (g > 127){
-//               ROS_INFO("skip green color");
-//               continue;
-//             }
-
-//             // --- 4. 检测其他形状 ---
-//             ShapeDetectionResult detection_result = detectShapeRotation_multi(cluster);
-            
-//             // 添加到检测结果中
-//             detected_objects.push_back(detection_result);
-            
-//             // 从工作点云中移除当前聚类
-//             subtractPointCloud(working_cloud, cluster, 0.01);
-            
-//             found_object = true;
-//         }
-        
-//         if (!found_object) {
-//             break;  // 如果当前所有聚类都不是目标物体，退出循环
-//         }
-//     }
-    
-//     ROS_INFO("Detected %zu objects", detected_objects.size());
-// }
-
-
-
 // Condition function 
 bool enforce_color_similarity(const pcl::PointXYZRGBA& a, const pcl::PointXYZRGBA& b, float squared_dist) {
 
@@ -526,11 +317,6 @@ void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud) 
 
 
 
-
-
-
-
-
 void processShapeCombination(
   const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& obj_cloud_ptr,
   const std::string& shape_type,
@@ -749,17 +535,22 @@ void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::
     
     // 存储所有有效的聚类
     std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> valid_clusters;
+    std::vector<Eigen::Vector4f> cluster_centroids;
+
     
     // 执行点云聚类
-    clusterPointCloud(working_cloud, valid_clusters);
+    clusterPointCloud(working_cloud, valid_clusters, cluster_centroids);
     
     ROS_INFO("Found %zu valid clusters for processing", valid_clusters.size());
     
     // 对每个有效聚类进行处理
     for (size_t i = 0; i < valid_clusters.size(); ++i) {
-        auto& cluster = valid_clusters[i];
 
-        if (i > 30){break;} // 仅处理前16个聚类
+        auto& cluster = valid_clusters[i];
+        auto& centroid = cluster_centroids[i];
+
+
+        if (i > 25){break;} // 仅处理前16个聚类
         
         // 计算轴向边界框和聚类中心
         pcl::PointXYZRGBA min_pt, max_pt;
@@ -789,6 +580,7 @@ void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::
             bool is_basket = checkBasket(cluster, dims, object_point, working_cloud, detected_objects);
             if (is_basket) {
                 have_basket = true;
+
                 continue;
             }
         }
@@ -797,25 +589,31 @@ void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::
         if (isValidObjectCluster(cluster, dims, obstacles)) {
             // 形状识别
             ShapeDetectionResult detection_result = detectShapeRotation_multi(cluster);
-            if (detection_result.overlap_score < 2) {
+            if (detection_result.overlap_score < 10) {
                 ROS_INFO("Invalid shape detection result, skipping");
                 continue;
             }
-            detected_objects.push_back(detection_result);
 
             pcl::io::savePCDFileASCII("./temp/cluster" + std::to_string(i) + ".pcd", *cluster);
+
+            detection_result.centroid = centroid;
+            detected_objects.push_back(detection_result);
 
         }
     }
     
+
+
     ROS_INFO("Detected %zu objects", detected_objects.size() - 1);
 }
 
-// 点云聚类函数
+// 点云聚类函数，返回聚类中心点
 void clusterPointCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud, 
-                      std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr>& valid_clusters) {
-    // 清空输出集合
+                      std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr>& valid_clusters,
+                      std::vector<Eigen::Vector4f>& cluster_centroids) {
+    // 清空输出集合和中心点向量
     valid_clusters.clear();
+    cluster_centroids.clear();
     
     // 创建KdTree用于聚类
     pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGBA>);
@@ -845,7 +643,7 @@ void clusterPointCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud,
             return a.indices.size() > b.indices.size();
         });
     
-    // 为每个聚类创建点云
+    // 为每个聚类创建点云，并计算中心点
     for (const auto& indices : cluster_indices) {
         // 创建新的点云
         pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cluster(new pcl::PointCloud<pcl::PointXYZRGBA>);
@@ -857,7 +655,17 @@ void clusterPointCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud,
         cluster->height = 1;
         cluster->is_dense = true;
         
+        // 计算聚类中心点
+        Eigen::Vector4f centroid;
+        pcl::compute3DCentroid(*cluster, centroid);
+        
+        // 将点云和中心点添加到返回向量中
         valid_clusters.push_back(cluster);
+        cluster_centroids.push_back(centroid);
+        
+        ROS_INFO("Cluster %zu has %zu points, centroid at [%.3f, %.3f, %.3f]", 
+                 cluster_centroids.size()-1, cluster->points.size(),
+                 centroid[0], centroid[1], centroid[2]);
     }
 }
 
@@ -915,12 +723,21 @@ bool isValidObjectCluster(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cluster, cons
     ROS_INFO("Cluster average color: R: %d, G: %d, B: %d", r, g, b);
     
     // 尺寸检查
-    const float max_size_threshold = 0.25f;
+    const float max_size_threshold = 0.04*5*2;
     if (dims[0] > max_size_threshold || dims[1] > max_size_threshold) {
         ROS_INFO("Invalid cluster with dimensions: %.3f x %.3f x %.3f", dims[0], dims[1], dims[2]);
         return false;
     }
     
+
+    const float min_size_threshold = 0.02*5/2; //(1.5 -> sqrt2)
+
+    if (dims[0] < min_size_threshold || dims[1] < min_size_threshold) {
+        ROS_INFO("Invalid cluster with dimensions: %.3f x %.3f x %.3f", dims[0], dims[1], dims[2]);
+        return false;
+    }
+
+
     // 颜色过滤
     if (r > 145 && r < 155 && g > 145 && g < 155 && b > 145 && b < 155) {
         ROS_INFO("Skipping gray color cluster");

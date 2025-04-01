@@ -225,10 +225,9 @@ private:
   void set_z_constraint(double min_height = 0.4, double max_height = 1.2);
   // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
 
-
+  void checkTrajectoryTimestamps(moveit_msgs::RobotTrajectory& trajectory);
 };
 
 
-inline double random_double(double min, double max); 
 
 #endif // end of include guard for cw2_CLASS_H_
