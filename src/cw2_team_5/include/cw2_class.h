@@ -140,7 +140,7 @@ public:
 
   sensor_msgs::PointCloud2ConstPtr latest_cloud;
 
-  bool move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian = false, int recursion_depth = 0);
+  bool move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian = false, int recursion_depth = 0, bool fast = true);
   
   pcl::PCLPointCloud2 pcl_pc_;
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr convertToPCL(
@@ -149,6 +149,9 @@ public:
     const std::string& target_frame = "world");
 
   tf::TransformListener tf_listener_;
+
+  std::string base_frame_ = "world";
+
 
   /** \brief MoveIt interface to interact with the moveit planning scene 
     * (eg collision objects). */
@@ -168,9 +171,56 @@ public:
   void set_constraint();
   void clear_constraint();
 
+  /// @brief function to add the ground plane into motion planning for collision avoidence.
+  /// @param object_name std::string name of the plane added
+  void 
+  addPlane(const std::string& object_name);
+
+  /// @brief function to add the baskets into motion planning for collision avoidence. 
+  /// @param name std::string prefix for the objects added. 
+  /// @param basket_pos geometry_msgs::Point location of the object.
+  void
+  addBasket(const std::string& name, const geometry_msgs::Point& basket_pos);
+
+  /// @brief function to add constraints to limit pandas movement
+  /// This will make the actions of the arm smoother, at the expense of possibly more planning (or maybe not)
+  void
+  setConstraint();
+
+  /// @brief Movelt function to remove object in motion planning.
+  /// @param object_name std::string name of object to be removed.
+  void
+  removeCollisionObject(const std::string& object_name);
+
+  /// @brief Movelt function to add object into motion planning for collision avoidence. 
+  /// @param object_name std::string name of object to add.
+  /// @param centre geometry_msgs::Point centre position of the object.
+  /// @param dimensions geometry_msgs::Vector3 dimensions of the object.
+  /// @param orientation geometrymsgs::Quaternion orientation of the object.
+  void
+  addCollisionObject(const std::string& object_name, 
+                      const geometry_msgs::Point& centre, 
+                      const geometry_msgs::Vector3& dimensions, 
+                      const geometry_msgs::Quaternion& orientation);
+
+
+  /// \brief remove all collision objects
+  void
+  removeAllCollisions();
+
   void pick_and_place(const std::string& obj_name, 
     const geometry_msgs::Point& obj_loc, 
-    const geometry_msgs::Point& goal_loc) ;
+    const geometry_msgs::Point& goal_loc,
+    std::vector<std::string> collision_obj_parts) ;
+
+
+  /////////////////
+  // Adding Collision Object
+  /////////////////
+  void genRect(const std::string& name, const float x, const float y, const float dim_x, const float dim_y, const float theta);
+  void removeCollisionObjects(std::vector<std::string> obj_names);
+  std::vector<std::string> genNoughtObj(const float cell_size, const float x, const float y, const float theta);
+  std::vector<std::string> genCrossObj(const float cell_size, const float x, const float y, const float theta);
 
   /////////////////
   // Temporary
@@ -195,7 +245,7 @@ public:
   void filterPointCloudByHeight(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr input_cloud, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr output_cloud, float min_height, float max_height);
   void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
   void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud);
-  void pick_and_place(const std::string& obj_name, const geometry_msgs::Pose& obj_loc, const geometry_msgs::Point& goal_loc) ;
+  void pick_and_place(const std::string& obj_name, const geometry_msgs::Pose& obj_loc, const geometry_msgs::Point& goal_loc, std::vector<std::string> collision_obj_parts) ;
 
 
 

@@ -118,12 +118,39 @@ ShapeDetectionResult detectShapeRotation(
       }
       
       // 本形状的最大重叠度和对应角度
+      float shape_max_overlap_rough = 0.0;
+      float shape_best_angle_rough = -1.0;
+
+
+      // Roughly search for a best match with degrees = 5
+      for (float degrees = 0; degrees < 90; degrees += 6.0) {
+        // 创建旋转变换
+        Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+        transform.rotate(Eigen::AngleAxisf(degrees * M_PI / 180, Eigen::Vector3f::UnitZ()));
+        
+        // 旋转参考形状
+        pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::transformPointCloud(*shape_checker_ptr, *transformed_cloud, transform);
+        
+        // 计算重叠率
+        float overlap = calculateOverlap(obj_cloud_ptr, transformed_cloud);
+        
+        // 更新本形状的最佳匹配
+        if (overlap > shape_max_overlap_rough) {
+          shape_max_overlap_rough = overlap;
+          shape_best_angle_rough = degrees;
+        }
+      
+      }
+      // 本形状的最大重叠度和对应角度
       float shape_max_overlap = 0.0;
       float shape_best_angle = -1.0;
+      float degrees = 0.0;
       
       // 测试0-90度范围内的所有角度
-      for (float degrees = 0; degrees < 90; degrees += angle_step) {
+      for (float degrees_it = (shape_best_angle_rough-5); degrees_it < (shape_best_angle_rough+5); degrees_it += angle_step) {
         // 创建旋转变换
+        degrees = remainder(degrees_it,90.0);
         Eigen::Affine3f transform = Eigen::Affine3f::Identity();
         transform.rotate(Eigen::AngleAxisf(degrees * M_PI / 180, Eigen::Vector3f::UnitZ()));
         
@@ -316,6 +343,7 @@ void processShapeCombination(
   ShapeDetectionResult& global_result)
 {
   // 生成参考形状点云
+  ROS_INFO("Generating shape pointcloud...");
   pcl::PointCloud<pcl::PointXYZ>::Ptr shape_checker_ptr;
   if (shape_type == "cross") {
     shape_checker_ptr = generateCrossShapePointCloud(size);
@@ -323,10 +351,40 @@ void processShapeCombination(
     shape_checker_ptr = generateOughtShapePointCloud(size);
   }
 
+
+  float shape_max_overlap_rough = 0.0;
+  float shape_best_angle_rough = -1.0;
+
+
+  ROS_INFO("Starting Rough orientation search...");
+  // Roughly search for a best match with error bound in less than 5 degrees
+  for (float degrees = 0; degrees < 90; degrees += 5.0) {
+    Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+    transform.rotate(Eigen::AngleAxisf(degrees * M_PI / 180, Eigen::Vector3f::UnitZ()));
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::transformPointCloud(*shape_checker_ptr, *transformed_cloud, transform);
+
+    float overlap = calculateOverlap(obj_cloud_ptr, transformed_cloud);
+
+    if (overlap > shape_max_overlap_rough) {
+      shape_max_overlap_rough = overlap;
+      shape_best_angle_rough = degrees;
+    }
+  }
+
+
+  ROS_INFO("Starting Fine orientation search...");
+  // 本形状的最大重叠度和对应角度
   float shape_max_overlap = 0.0;
   float shape_best_angle = -1.0;
-
-  for (float degrees = 0; degrees < 90; degrees += angle_step) {
+  float degrees = 0.0;
+  
+  // 测试0-90度范围内的所有角度
+  // Find the more accurate shape orientation by testing within +- 5 degrees
+  for (float degrees_it = (shape_best_angle_rough-5); degrees_it < (shape_best_angle_rough+5); degrees_it += angle_step) {
+    // 创建旋转变换
+    degrees = fmod(degrees_it,90.0);
     Eigen::Affine3f transform = Eigen::Affine3f::Identity();
     transform.rotate(Eigen::AngleAxisf(degrees * M_PI / 180, Eigen::Vector3f::UnitZ()));
 
@@ -376,6 +434,7 @@ ShapeDetectionResult detectShapeRotation_multi(
   std::vector<std::thread> threads;
 
   // 启动6个线程，每个线程处理一个 shape + size 组合
+  ROS_INFO("Initializing threads for all possible shapse and sizes...");
   for (const auto& shape_type : shape_types) {
     for (const auto& size : sizes) {
       threads.emplace_back(processShapeCombination,
@@ -490,31 +549,30 @@ void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::
     // 清空./temp文件夹或在不存在时创建
     std::string temp_folder_path = "./temp";
     boost::filesystem::path dir(temp_folder_path);
-
-    for (const auto& entry : std::filesystem::directory_iterator(temp_folder_path)) {
-      std::filesystem::remove_all(entry.path());
-    }
 //////////////////////////////////
 
     //////////////////////////////////////////////
     // 检查文件夹是否存在，不存在就创建
-    // if (!boost::filesystem::exists(dir)) {
-    //   ROS_INFO("Temp folder does not exist, creating: %s", temp_folder_path.c_str());
-    //   boost::system::error_code ec;
-    //   if (boost::filesystem::create_directory(dir, ec)) {
-    //     ROS_INFO("Successfully created temp folder");
-    //   } else {
-    //     ROS_ERROR("Failed to create temp folder: %s", ec.message().c_str());
-    //   }
-    // } else {
-    //   // 文件夹存在，清空其中内容
-    //   boost::filesystem::directory_iterator end_itr;
-    //   for (boost::filesystem::directory_iterator itr(dir); itr != end_itr; ++itr) {
-    //     boost::filesystem::remove_all(itr->path());
-    //   }
-    //   ROS_INFO("Cleared existing temp folder contents");
-    // }
+    if (!boost::filesystem::exists(dir)) {
+      ROS_INFO("Temp folder does not exist, creating: %s", temp_folder_path.c_str());
+      boost::system::error_code ec;
+      if (boost::filesystem::create_directory(dir, ec)) {
+        ROS_INFO("Successfully created temp folder");
+      } else {
+        ROS_ERROR("Failed to create temp folder: %s", ec.message().c_str());
+      }
+    } else {
+      // 文件夹存在，清空其中内容
+      boost::filesystem::directory_iterator end_itr;
+      for (boost::filesystem::directory_iterator itr(dir); itr != end_itr; ++itr) {
+        boost::filesystem::remove_all(itr->path());
+      }
+      ROS_INFO("Cleared existing temp folder contents");
+    }
 
+    for (const auto& entry : std::filesystem::directory_iterator(temp_folder_path)) {
+      std::filesystem::remove_all(entry.path());
+    }
   /////////////////////////////////////////////
 
 
@@ -579,6 +637,7 @@ void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::
         // 检查是否是其他形状
         if (isValidObjectCluster(cluster, dims, obstacles)) {
             // 形状识别
+            ROS_INFO("Matching shape to orientation, processing...");
             ShapeDetectionResult detection_result = detectShapeRotation_multi(cluster);
             if (detection_result.overlap_score < 10) {
                 ROS_INFO("Invalid shape detection result, skipping");

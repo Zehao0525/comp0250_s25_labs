@@ -32,3 +32,6 @@ Task3的完整工作流程如下：
       rt.getRobotTrajectoryMsg(my_plan.trajectory_); 
 
       这部分移动函数改变了机械臂速度 为了加快调试用的 最后提交记得删除
+
+
+Theres a chance that trajectroy planning fails. It does not usually happen, but if it does it might affect pick and place

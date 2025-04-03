@@ -48,6 +48,8 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr generateCrossShapePointCloud(const float cel
 }
 
 
+
+
 pcl::PointCloud<pcl::PointXYZ>::Ptr generateOughtShapePointCloud(const float cell_size) {
     // 定义点云指针
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);

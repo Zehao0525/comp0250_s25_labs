@@ -1,0 +1,28 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/wancai/comp0129_s23_robot/devel/include/**",
+        "/home/wancai/catkin_ws/devel/include/**",
+        "/opt/ros/noetic/include/**",
+        "/home/wancai/comp0129_s23_robot/src/cw1_team_4/include/**",
+        "/home/wancai/comp0129_s23_robot/src/labs/moveit_solution/include/**",
+        "/home/wancai/comp0129_s23_robot/src/labs/moveit_tutorial/include/**",
+        "/home/wancai/comp0129_s23_robot/src/labs/pcl_demo/include/**",
+        "/home/wancai/comp0129_s23_robot/src/labs/pcl_tutorial/include/**",
+        "/home/wancai/comp0129_s23_robot/src/realsense_gazebo_plugin/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

@@ -5,7 +5,8 @@
 #include <moveit/robot_trajectory/robot_trajectory.h>
 
 
-bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recursion_depth) {
+bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recursion_depth, bool fast) {
+  
   // 递归深度限制，防止无限递归
   const int max_recursion_depth = 3;
   if (recursion_depth > max_recursion_depth) {
@@ -47,18 +48,21 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
       plan_success = true;
 
       //////////////////////////////////////////////
+      
 
       // 优化轨迹速度
-      robot_trajectory::RobotTrajectory rt(arm_group_.getCurrentState()->getRobotModel(), "panda_arm");
-      rt.setRobotTrajectoryMsg(*arm_group_.getCurrentState(), my_plan.trajectory_);
+      if(!fast){
+        robot_trajectory::RobotTrajectory rt(arm_group_.getCurrentState()->getRobotModel(), "panda_arm");
+        rt.setRobotTrajectoryMsg(*arm_group_.getCurrentState(), my_plan.trajectory_);
+        // 应用速度和加速度缩放因子进行时间参数化
+        trajectory_processing::IterativeParabolicTimeParameterization iptp;
+        double velocity_scaling_factor = 0.2;  // 速度缩放因子（提高速度）
+        double acceleration_scaling_factor = 1;  // 加速度缩放因子
+        iptp.computeTimeStamps(rt, velocity_scaling_factor, acceleration_scaling_factor);
 
-      // 应用速度和加速度缩放因子进行时间参数化
-      trajectory_processing::IterativeParabolicTimeParameterization iptp;
-      double velocity_scaling_factor = 1.5;  // 速度缩放因子（提高速度）
-      double acceleration_scaling_factor = 1;  // 加速度缩放因子
-      iptp.computeTimeStamps(rt, velocity_scaling_factor, acceleration_scaling_factor);
-
-      rt.getRobotTrajectoryMsg(my_plan.trajectory_);
+        // 将优化后的轨迹应用回计划
+        rt.getRobotTrajectoryMsg(my_plan.trajectory_);
+      }
 
       ///////////////////////////////////////////////
 
@@ -120,17 +124,18 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
 
       /////////////////////////////////////////
       // 优化轨迹速度
-      robot_trajectory::RobotTrajectory rt(arm_group_.getCurrentState()->getRobotModel(), "panda_arm");
-      rt.setRobotTrajectoryMsg(*arm_group_.getCurrentState(), my_plan.trajectory_);
+      if(fast){
+        robot_trajectory::RobotTrajectory rt(arm_group_.getCurrentState()->getRobotModel(), "panda_arm");
+        rt.setRobotTrajectoryMsg(*arm_group_.getCurrentState(), my_plan.trajectory_);
+        // 应用速度和加速度缩放因子进行时间参数化
+        trajectory_processing::IterativeParabolicTimeParameterization iptp;
+        double velocity_scaling_factor = 1.5;  // 速度缩放因子（提高速度）
+        double acceleration_scaling_factor = 1;  // 加速度缩放因子
+        iptp.computeTimeStamps(rt, velocity_scaling_factor, acceleration_scaling_factor);
 
-      // 应用速度和加速度缩放因子进行时间参数化
-      trajectory_processing::IterativeParabolicTimeParameterization iptp;
-      double velocity_scaling_factor = 1.5;  // 速度缩放因子（提高速度）
-      double acceleration_scaling_factor = 1;  // 加速度缩放因子
-      iptp.computeTimeStamps(rt, velocity_scaling_factor, acceleration_scaling_factor);
-
-      // 将优化后的轨迹应用回计划
-      rt.getRobotTrajectoryMsg(my_plan.trajectory_);
+        // 将优化后的轨迹应用回计划
+        rt.getRobotTrajectoryMsg(my_plan.trajectory_);
+      }
       /////////////////////////////////////////
 
 
@@ -180,15 +185,15 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
     if (recursion_depth == max_recursion_depth - 1) {
       ROS_WARN("Maximum recursion depth reached. Attempting final target with temporary waypoint.(REMOVE THE CONSTRAINT)");
       reset_arm();
-      waypoint_success = move_arm(temp_pose, use_cartesian, recursion_depth + 1);
+      waypoint_success = move_arm(temp_pose, use_cartesian, recursion_depth + 1, fast);
 
     } else {
-      waypoint_success = move_arm(temp_pose, use_cartesian, recursion_depth + 1);
+      waypoint_success = move_arm(temp_pose, use_cartesian, recursion_depth + 1, fast);
     }
 
     if (waypoint_success) {
       ROS_INFO("Successfully moved to intermediate waypoint. Attempting final target again.");
-      return move_arm(target_pose, use_cartesian, recursion_depth + 1);
+      return move_arm(target_pose, use_cartesian, recursion_depth + 1, fast);
     } else {
       ROS_ERROR("Failed to move to intermediate waypoint.");
       return false;
@@ -198,13 +203,13 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
   return true;
 }
 
-void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Point& obj_loc, const geometry_msgs::Point& goal_loc) {
+void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Point& obj_loc, const geometry_msgs::Point& goal_loc, std::vector<std::string> collision_obj_parts) {
   Init_Pose obj_point;
   obj_point.position = obj_loc;
-  pick_and_place(obj_name, obj_point, goal_loc);
+  pick_and_place(obj_name, obj_point, goal_loc, collision_obj_parts);
 }
 
-void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose& obj_loc, const geometry_msgs::Point& goal_loc) {
+void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose& obj_loc, const geometry_msgs::Point& goal_loc, std::vector<std::string> collision_obj_parts) {
     ROS_INFO("picking up and placing: %s", obj_name.c_str());
     
 
@@ -223,16 +228,16 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose&
 
     clear_constraint();
     target_pos_down = obj_loc;
-    target_pos_down.position.z = 0.04 + 0.1;
-    bool move_down_success = move_arm(target_pos_down, true);
+    target_pos_down.position.z = 0.04 + 0.11;
+    bool move_down_success = move_arm(target_pos_down, false, 0, false);
     
-    
+    removeCollisionObjects(collision_obj_parts);
     bool close_gripper_success = move_gripper(0.0);
     
     
     target_pos_up = obj_loc;
     target_pos_up.position.z = 0.41;
-    bool move_up_success = move_arm(target_pos_up, true);
+    bool move_up_success = move_arm(target_pos_up, false);
     
     ///////////////////////////////////////////
     // Move to goal position
@@ -262,8 +267,8 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose&
     target_pos_up2.position.z = 0.41;
     bool move_up_success2 = move_arm(target_pos_up2, true);
 
-    set_constraint();
-       }
+    //set_constraint();
+}
       
 
 
@@ -329,6 +334,8 @@ void cw2::set_constraint() {
   void cw2::clear_constraint() {
     constraints_.joint_constraints.clear();
     constraints_.position_constraints.clear();  
+
+    // Re-apply the modified constraints
     arm_group_.clearPathConstraints();
   }
 

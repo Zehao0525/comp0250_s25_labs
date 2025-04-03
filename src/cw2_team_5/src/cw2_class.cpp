@@ -39,7 +39,9 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
 {
   /* function which should solve task 1 */
   reset_arm();
+  // setConstraint();
   ROS_INFO("The coursework solving callback for task 1 has been triggered");
+  addPlane("plane");
 
   geometry_msgs::PointStamped object_point = request.object_point;
   geometry_msgs::PointStamped goal_point = request.goal_point;
@@ -55,7 +57,7 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
   target_pose.position.z = 0.5;
 
 
-  // set_constraint();
+  // setConstraint();
   // clear_constraint();
   
   bool mvstate = move_arm(target_pose);
@@ -95,6 +97,15 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
   /////////////////////////////////////////
 
 
+  ROS_INFO_STREAM("centriod[0]: " << detection_result.centroid[0]);
+  ROS_INFO_STREAM("centroid[1]: " << detection_result.centroid[1]);
+  std::vector<std::string> collision_obj_parts;
+  if(detection_result.shape_type  == "cross"){
+    collision_obj_parts = genCrossObj(detection_result.size, target_pose.position.x, target_pose.position.y, detection_result.rotation_angle);
+  }
+  else{
+    collision_obj_parts = genNoughtObj(detection_result.size, target_pose.position.x, target_pose.position.y, detection_result.rotation_angle);
+  }
 
   adjustPoseByShapeAndRotation(target_pose, shape_type, rot_degree);
 
@@ -110,10 +121,11 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
 
   Init_Pose goal_pose;
   goal_pose.position = goal_point.point;
+  addBasket("basket", goal_point.point);
   goal_pose.position.z = 0.2;
 
 
-  pick_and_place(shape_type, target_pose,  goal_pose.position);
+  pick_and_place(shape_type, target_pose,  goal_pose.position, collision_obj_parts);
 
   return true;
 }
@@ -126,9 +138,14 @@ cw2::t2_callback(cw2_world_spawner::Task2Service::Request &request,
   cw2_world_spawner::Task2Service::Response &response)
 {
   /* function which should solve task 2 */
-  // set_constraint();
+  // setConstraint();
   reset_arm();
   set_z_constraint(0.4, 1.2);
+
+  // add arm constraints
+  // setConstraint();
+  // add plane model
+  addPlane("plane");
 
   // decoder
   std::vector<geometry_msgs::Point> ref_object_points;
@@ -154,18 +171,22 @@ cw2::t2_callback(cw2_world_spawner::Task2Service::Request &request,
     ROS_INFO("Move state: %d", mvstate);
   
     // 获取点云数据
+    ROS_INFO("Converting to PCL...");
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr PCL_cloud = convertToPCL(latest_cloud, tf_listener_);
     
     // 过滤点云数据
+    ROS_INFO("Filtering pointcloud...");
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr obj_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGBA>);
     filterPointCloudByHeight(PCL_cloud, obj_cloud_ptr, 0.04, 0.08);
     
     // 平移点云至原点
+    ROS_INFO("Traslating pointcloud for shape matching...");
     Eigen::Affine3f transform = Eigen::Affine3f::Identity();
     transform.translation() << -reference_point.point.x, -reference_point.point.y, -reference_point.point.z;
     pcl::transformPointCloud(*obj_cloud_ptr, *obj_cloud_ptr, transform);
     
     // 检测形状
+    ROS_INFO("Matching shape to orientation, processing...");
     ShapeDetectionResult detection_result = detectShapeRotation_multi(obj_cloud_ptr);
     if (detection_result.rotation_angle < 0) {
       ROS_WARN("Cannot detect shape for reference object at position [%f, %f, %f]", 
@@ -215,6 +236,7 @@ cw2::t2_callback(cw2_world_spawner::Task2Service::Request &request,
   pcl::transformPointCloud(*obj_cloud_ptr, *obj_cloud_ptr, transform);
   
   // 检测神秘对象的形状
+  ROS_INFO("Matching shapes, processing...");
   ShapeDetectionResult mystery_result = detectShapeRotation_multi(obj_cloud_ptr);
   if (mystery_result.rotation_angle < 0) {
     ROS_ERROR("Cannot detect shape for mystery object");
@@ -267,7 +289,9 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
 
   ROS_INFO("The coursework solving callback for task 3 has been triggered");
   reset_arm();
-  // set_constraint();
+  // setConstraint();
+  addPlane("plane");
+  // setConstraint();
 
 
 
@@ -276,7 +300,7 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
   set_z_constraint(0.4, 1.2);
   combined_cloud = scanPlatform();
   // clear_constraint();
-  // set_constraint();
+  // setConstraint();
 
 
   // 1. 点云下采样 - 使用VoxelGrid滤波器减少点数量
@@ -358,6 +382,14 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
     picked_object = candidate_nought;
   }
   
+  std::vector<std::string> collision_obj_parts;
+  if(picked_object.shape_type  == "cross"){
+    collision_obj_parts = genCrossObj(picked_object.size, picked_object.centroid[0], picked_object.centroid[1], picked_object.rotation_angle);
+  }
+  else{
+    collision_obj_parts = genNoughtObj(picked_object.size, picked_object.centroid[0], picked_object.centroid[1], picked_object.rotation_angle);
+  }
+
   // 对位置进行调整以提高抓取成功率
   if (picked_object.shape_type == "cross") { 
     picked_object.centroid[0] += 0.05; 
@@ -370,26 +402,28 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
   grasp_pose.position.y = picked_object.centroid[1];
   grasp_pose.position.z = 0.41; // 设置z轴高度
 
-  // 执行抓取和放置
-  adjustPoseByShapeAndRotation(grasp_pose, picked_object.shape_type, picked_object.rotation_angle);
 
-
-
-  
   Init_Pose temp_pose;
   temp_pose.position.x = picked_object.centroid[0];
   temp_pose.position.y = picked_object.centroid[1];
   temp_pose.position.z = 0.41; // 设置z轴高度
 
-  move_arm(temp_pose);
 
-
-  // 执行抓取和放置操作   检测准确度依然不够
   geometry_msgs::Point candidate_basket_point;
   candidate_basket_point.x = candidate_basket.centroid[0];
   candidate_basket_point.y = candidate_basket.centroid[1];
+  addBasket("basket", candidate_basket_point);
   candidate_basket_point.z = 0.2; // 设置z轴高度
-  pick_and_place(picked_object.shape_type, temp_pose.position, candidate_basket_point);
+
+  // 执行抓取和放置
+  adjustPoseByShapeAndRotation(grasp_pose, picked_object.shape_type, picked_object.rotation_angle);
+
+  // move arm to above the object
+  move_arm(temp_pose);
+
+  // 执行抓取和放置操作 
+  // pick and place
+  pick_and_place(picked_object.shape_type, temp_pose.position, candidate_basket_point, collision_obj_parts);
 
   
   ROS_INFO("Task 3 complete");
@@ -493,4 +527,179 @@ void cw2::checkTrajectoryTimestamps(moveit_msgs::RobotTrajectory& trajectory) {
       last_time = current_time;
     }
   }
+}
+
+
+// #include "cw1_tools.cpp"
+
+///////////////////////////////////////////////////////////////////////////////
+
+void cw2::addPlane(const std::string& object_name)
+{
+  // 0.02 thick, 0.1 on both sides for a tile
+  // x center from 0.25 to 0.65 (0.2-0.7)
+  // y center from -0.4 to 0.4 (-0.45-0.45)
+  // z centres at 0.01
+  geometry_msgs::Point plane_pos;
+  plane_pos.x = 0.05;
+  plane_pos.y = 0;
+  plane_pos.z = 0.01;
+
+  geometry_msgs::Vector3 plane_dim;
+  plane_dim.x = 1.32;
+  plane_dim.y = 0.92;
+  plane_dim.z = 0.02;
+
+  geometry_msgs::Quaternion plate_ori;
+  plate_ori.w = 1.0;
+  plate_ori.x = 0.0;
+  plate_ori.y = 0.0;
+  plate_ori.z = 0.0;
+
+  addCollisionObject(object_name, plane_pos, plane_dim, plate_ori);
+}
+
+
+void cw2::addBasket(const std::string& name, const geometry_msgs::Point& basket_pos)
+{
+  // Define basket location
+  geometry_msgs::Vector3 basket_dim;
+  basket_dim.x = 0.37;
+  basket_dim.y = 0.37;
+  basket_dim.z = 0.02;
+
+  geometry_msgs::Point basket_pos_1 = basket_pos;
+  basket_pos_1.z = basket_pos.z + 0.02;
+
+  geometry_msgs::Quaternion basket_ori;
+  basket_ori.w = 1.0;
+  basket_ori.x = 0.0;
+  basket_ori.y = 0.0;
+  basket_ori.z = 0.0;
+
+  addCollisionObject(name, basket_pos_1, basket_dim, basket_ori);
+}
+
+
+void cw2::removeAllCollisions()
+{
+  // create a collision object message, and a vector of these messages
+  moveit_msgs::CollisionObject collision_object;
+  std::vector<moveit_msgs::CollisionObject> object_vector;
+
+  collision_object.operation = collision_object.REMOVE;
+  object_vector.push_back(collision_object);
+  planning_scene_interface_.applyCollisionObjects(object_vector);
+}
+
+void cw2::addCollisionObject(const std::string& object_name,
+                            const geometry_msgs::Point& centre, 
+                            const geometry_msgs::Vector3& dimensions,
+                            const geometry_msgs::Quaternion& orientation)
+{
+  // create a collision object message, and a vector of these messages
+  moveit_msgs::CollisionObject collision_object;
+  std::vector<moveit_msgs::CollisionObject> object_vector;
+  
+  // input header information
+  collision_object.id = object_name;
+  collision_object.header.frame_id = base_frame_;
+
+  // define the primitive and its dimensions
+  collision_object.primitives.resize(1);
+  collision_object.primitives[0].type = collision_object.primitives[0].BOX;
+  collision_object.primitives[0].dimensions.resize(3);
+  collision_object.primitives[0].dimensions[0] = dimensions.x;
+  collision_object.primitives[0].dimensions[1] = dimensions.y;
+  collision_object.primitives[0].dimensions[2] = dimensions.z;
+
+  // define the pose of the collision object
+  collision_object.primitive_poses.resize(1);
+  collision_object.primitive_poses[0].position.x = centre.x;
+  collision_object.primitive_poses[0].position.y = centre.y;
+  collision_object.primitive_poses[0].position.z = centre.z;
+  collision_object.primitive_poses[0].orientation = orientation;
+
+  // define that we will be adding this collision object 
+  collision_object.operation = collision_object.ADD;
+
+  // add the collision object to the vector, then apply to planning scene
+  object_vector.push_back(collision_object);
+  planning_scene_interface_.applyCollisionObjects(object_vector);
+}
+
+void cw2::removeCollisionObject(const std::string& object_name)
+{
+  // create a collision object message, and a vector of these messages
+  moveit_msgs::CollisionObject collision_object;
+  std::vector<moveit_msgs::CollisionObject> object_vector;
+  
+  // input header information
+  collision_object.id = object_name;
+  collision_object.header.frame_id = base_frame_;
+
+  // define that we will be removing this collision object 
+  collision_object.operation = collision_object.REMOVE;
+
+  object_vector.push_back(collision_object);
+  planning_scene_interface_.applyCollisionObjects(object_vector);
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+
+void cw2::setConstraint() {
+  // We Actually want to allow the arm to spin 360 degrees
+  joint_constraints_[0].joint_name = "panda_joint1";
+  joint_constraints_[0].position = 0.0;
+  joint_constraints_[0].tolerance_above = M_PI * 0.45;
+  joint_constraints_[0].tolerance_below = M_PI * 0.45;
+  joint_constraints_[0].weight = 1.0;
+
+  joint_constraints_[1].joint_name = "panda_joint2";
+  joint_constraints_[1].position = 0.4;
+  joint_constraints_[1].tolerance_above = M_PI * 0.8;
+  joint_constraints_[1].tolerance_below = M_PI * 0.8;
+  joint_constraints_[1].weight = 1.0;
+
+  joint_constraints_[2].joint_name = "panda_joint3";
+  joint_constraints_[2].position = 0.0;
+  joint_constraints_[2].tolerance_above = M_PI * 0.25;
+  joint_constraints_[2].tolerance_below = M_PI * 0.25;
+  joint_constraints_[2].weight = 1.0;
+
+  joint_constraints_[3].joint_name = "panda_joint4";
+  joint_constraints_[3].position = -2.13;
+  joint_constraints_[3].tolerance_above = M_PI * 0.5;
+  joint_constraints_[3].tolerance_below = M_PI * 0.5;
+  joint_constraints_[3].weight = 1.0;
+
+  joint_constraints_[4].joint_name = "panda_joint5";
+  joint_constraints_[4].position = 0.0;
+  joint_constraints_[4].tolerance_above = M_PI * 0.3;
+  joint_constraints_[4].tolerance_below = M_PI * 0.3;
+  joint_constraints_[4].weight = 1.0;
+
+  joint_constraints_[5].joint_name = "panda_joint6";
+  joint_constraints_[5].position = 2.33;
+  joint_constraints_[5].tolerance_above = M_PI * 0.25;
+  joint_constraints_[5].tolerance_below = M_PI * 0.8;
+  joint_constraints_[5].weight = 1.0;
+
+  // We Also don't want this
+  joint_constraints_[6].joint_name = "panda_joint7";
+  joint_constraints_[6].position = 0.785;
+  joint_constraints_[6].tolerance_above = M_PI * 0.25;
+  joint_constraints_[6].tolerance_below = M_PI * 0.25;
+  joint_constraints_[6].weight = 1.0;
+
+  // constraints.joint_constraints.push_back(joint_constraints_[0]);
+  // constraints_.joint_constraints.push_back(joint_constraints_[1]);
+  constraints_.joint_constraints.push_back(joint_constraints_[2]);
+  constraints_.joint_constraints.push_back(joint_constraints_[3]);
+  constraints_.joint_constraints.push_back(joint_constraints_[4]);
+  // constraints.joint_constraints.push_back(joint_constraints_[5]);
+  // constraints.joint_constraints.push_back(joint_constraints_[6]);
+  arm_group_.setPathConstraints(constraints_);
 }

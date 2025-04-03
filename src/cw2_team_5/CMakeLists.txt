@@ -132,6 +132,7 @@ add_library(${PROJECT_NAME}_cw2_class_lib
   src/cw2_class.cpp
   src/pcl_tools.cpp
   src/move_and_pick.cpp
+  src/gen_rviz_obj.cpp
 )
 
 add_library(detect_object_Lib SHARED src/detect_object.cpp)
