@@ -96,9 +96,6 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
   
   /////////////////////////////////////////
 
-
-  ROS_INFO_STREAM("centriod[0]: " << detection_result.centroid[0]);
-  ROS_INFO_STREAM("centroid[1]: " << detection_result.centroid[1]);
   std::vector<std::string> collision_obj_parts;
   if(detection_result.shape_type  == "cross"){
     collision_obj_parts = genCrossObj(detection_result.size, target_pose.position.x, target_pose.position.y, detection_result.rotation_angle);
@@ -126,7 +123,7 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
 
 
   pick_and_place(shape_type, target_pose,  goal_pose.position, collision_obj_parts);
-
+  removeAllCollisions();
   return true;
 }
 
@@ -274,6 +271,7 @@ cw2::t2_callback(cw2_world_spawner::Task2Service::Request &request,
  
  response.mystery_object_num = match_idx + 1;
  ROS_INFO("Task 2 complete: Mystery object matches reference object %zu", match_idx + 1);
+ removeAllCollisions();
   return true;
 
 }
@@ -427,7 +425,7 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
 
   
   ROS_INFO("Task 3 complete");
-  
+  removeAllCollisions();
   return true;
 
 }

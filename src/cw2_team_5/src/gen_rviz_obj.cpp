@@ -30,33 +30,6 @@ std::vector<std::string> cw2::genNoughtObj(const float cell_size, const float x,
     float dim2 = cell_size;
     float theta_rad = theta / 180 * M_PI;
 
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO_STREAM("Cell size: " << cell_size);
-    ROS_INFO_STREAM("x,y: " << x << y);
-    ROS_INFO_STREAM("theta: " << theta);
 
     // left Side
     std::string id1 = "obj_nought_1";
@@ -90,33 +63,6 @@ std::vector<std::string> cw2::genCrossObj(const float cell_size, const float x, 
     float dim2 = cell_size;
     float theta_rad = theta / 180 * M_PI;
 
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO("Cell size:");
-    ROS_INFO_STREAM("Cell size: " << cell_size);
-    ROS_INFO_STREAM("x,y: " << x << y);
-    ROS_INFO_STREAM("theta: " << theta);
 
     // left Side
     std::string id1 = "obj_cross_1";
