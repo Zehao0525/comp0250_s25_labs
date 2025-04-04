@@ -38,6 +38,7 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
   cw2_world_spawner::Task1Service::Response &response) 
 {
   /* function which should solve task 1 */
+  removeAllCollisions();
   reset_arm();
   // setConstraint();
   ROS_INFO("The coursework solving callback for task 1 has been triggered");
@@ -104,7 +105,7 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
     collision_obj_parts = genNoughtObj(detection_result.size, target_pose.position.x, target_pose.position.y, detection_result.rotation_angle);
   }
 
-  adjustPoseByShapeAndRotation(target_pose, shape_type, rot_degree);
+  adjustPoseByShapeAndRotation(target_pose, shape_type, rot_degree, detection_result.size);
 
 
 
@@ -123,7 +124,6 @@ cw2::t1_callback(cw2_world_spawner::Task1Service::Request &request,
 
 
   pick_and_place(shape_type, target_pose,  goal_pose.position, collision_obj_parts);
-  removeAllCollisions();
   return true;
 }
 
@@ -136,6 +136,7 @@ cw2::t2_callback(cw2_world_spawner::Task2Service::Request &request,
 {
   /* function which should solve task 2 */
   // setConstraint();
+  removeAllCollisions();
   reset_arm();
   set_z_constraint(0.4, 1.2);
 
@@ -226,15 +227,22 @@ cw2::t2_callback(cw2_world_spawner::Task2Service::Request &request,
   // 过滤点云数据
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr obj_cloud_ptr(new pcl::PointCloud<pcl::PointXYZRGBA>);
   filterPointCloudByHeight(PCL_cloud, obj_cloud_ptr, 0.04, 0.08);
+
+  // Apply Voxel filter
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGBA>);
+  pcl::VoxelGrid<pcl::PointXYZRGBA> vg;
+  vg.setInputCloud(obj_cloud_ptr);
+  vg.setLeafSize(0.002f, 0.002f, 0.002f); // 5mm体素大小
+  vg.filter(*cloud_filtered);
   
   // 平移点云至原点
   Eigen::Affine3f transform = Eigen::Affine3f::Identity();
   transform.translation() << -mystery_point.point.x, -mystery_point.point.y, -mystery_point.point.z;
-  pcl::transformPointCloud(*obj_cloud_ptr, *obj_cloud_ptr, transform);
+  pcl::transformPointCloud(*cloud_filtered, *cloud_filtered, transform);
   
   // 检测神秘对象的形状
   ROS_INFO("Matching shapes, processing...");
-  ShapeDetectionResult mystery_result = detectShapeRotation_multi(obj_cloud_ptr);
+  ShapeDetectionResult mystery_result = detectShapeRotation_multi(cloud_filtered);
   if (mystery_result.rotation_angle < 0) {
     ROS_ERROR("Cannot detect shape for mystery object");
     return false;
@@ -271,7 +279,6 @@ cw2::t2_callback(cw2_world_spawner::Task2Service::Request &request,
  
  response.mystery_object_num = match_idx + 1;
  ROS_INFO("Task 2 complete: Mystery object matches reference object %zu", match_idx + 1);
- removeAllCollisions();
   return true;
 
 }
@@ -286,6 +293,7 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
   /* function which should solve task 3 */
 
   ROS_INFO("The coursework solving callback for task 3 has been triggered");
+  removeAllCollisions();
   reset_arm();
   // setConstraint();
   addPlane("plane");
@@ -295,7 +303,7 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
 
 
   combined_cloud.reset(new pcl::PointCloud<pcl::PointXYZRGBA>);
-  set_z_constraint(0.4, 1.2);
+  set_z_constraint(0.475, 1.2);
   combined_cloud = scanPlatform();
   // clear_constraint();
   // setConstraint();
@@ -340,22 +348,22 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
   response.total_num_shapes = detected_objects.size() - 1; // 排除篮子
   ShapeDetectionResult picked_object, candidate_cross, candidate_nought, candidate_basket;
   int cross_count = 0;
+  float cross_score = 0;
   int nought_count = 0;
-  float size_c = 0.02;
-  float size_n = 0.02;
+  float nought_score = 0;
   
-  // 使用转换后的DetectedObject处理， 选择大的cross和nought方便夹取
+  // We try to pick up the shape with the highest score (i.e. the most accurate data)
   for (const auto& obj : detected_objects) {
     if (obj.shape_type == "cross") {
       cross_count++;
-      if (obj.size >= size_c) {
-        size_c = obj.size;
+      if (obj.overlap_score >= cross_score) {
+        cross_score = obj.overlap_score;
         candidate_cross = obj;
       }
     } else if (obj.shape_type == "nought") {
       nought_count++;
-      if (obj.size >= size_n) {
-        size_n = obj.size;
+      if (obj.overlap_score >= nought_score) {
+        nought_score = obj.overlap_score;
         candidate_nought = obj;
       }
     } else if (obj.shape_type == "basket") {
@@ -363,20 +371,17 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
     }
   }
   // 确定要拾取的物体
-  if (cross_count > nought_count) {
+  if (cross_count >= nought_count) {
     response.num_most_common_shape = cross_count;
     ROS_INFO("Most common shape: cross");
     ROS_INFO("Cross count: %d", cross_count);
-    picked_object = candidate_cross;
-  } else if (cross_count == nought_count) {
-    response.num_most_common_shape = 0;
-    ROS_INFO("Most common shape: same");
-    ROS_INFO("Cross count: %d", cross_count);
+    ROS_INFO_STREAM("Score:" << cross_score);
     picked_object = candidate_cross;
   } else {
     response.num_most_common_shape = nought_count;
     ROS_INFO("Most common shape: nought");
     ROS_INFO("Nought count: %d", nought_count);
+    ROS_INFO_STREAM("Score:" << nought_score);
     picked_object = candidate_nought;
   }
   
@@ -388,18 +393,24 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
     collision_obj_parts = genNoughtObj(picked_object.size, picked_object.centroid[0], picked_object.centroid[1], picked_object.rotation_angle);
   }
 
-  // 对位置进行调整以提高抓取成功率
-  if (picked_object.shape_type == "cross") { 
-    picked_object.centroid[0] += 0.05; 
-  } else if (picked_object.shape_type == "nought") { 
-    picked_object.centroid[1]+= 0.08; 
-  }
+  // // 对位置进行调整以提高抓取成功率
+  // if (picked_object.shape_type == "cross") { 
+  //   picked_object.centroid[0] += 0.05; 
+  // } else if (picked_object.shape_type == "nought") { 
+  //   picked_object.centroid[1]+= 0.08; 
+  // }
 
-  geometry_msgs::Pose grasp_pose;
+  Init_Pose grasp_pose;
   grasp_pose.position.x = picked_object.centroid[0];
   grasp_pose.position.y = picked_object.centroid[1];
   grasp_pose.position.z = 0.41; // 设置z轴高度
+  grasp_pose.orientation.x = 0.9239;
+  grasp_pose.orientation.y = -0.3827;
+  grasp_pose.orientation.z = 0.0;
+  grasp_pose.orientation.w = 0.0;
 
+  // 执行抓取和放置
+  adjustPoseByShapeAndRotation(grasp_pose, picked_object.shape_type, picked_object.rotation_angle, picked_object.size);
 
   Init_Pose temp_pose;
   temp_pose.position.x = picked_object.centroid[0];
@@ -413,19 +424,21 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
   addBasket("basket", candidate_basket_point);
   candidate_basket_point.z = 0.2; // 设置z轴高度
 
-  // 执行抓取和放置
-  adjustPoseByShapeAndRotation(grasp_pose, picked_object.shape_type, picked_object.rotation_angle);
+  clear_constraint();
 
   // move arm to above the object
-  move_arm(temp_pose);
+  move_arm(temp_pose, false);
+
+  // move arm to above the object
+  move_arm(grasp_pose, false);
+
 
   // 执行抓取和放置操作 
   // pick and place
-  pick_and_place(picked_object.shape_type, temp_pose.position, candidate_basket_point, collision_obj_parts);
+  pick_and_place(picked_object.shape_type, grasp_pose, candidate_basket_point, collision_obj_parts);
 
   
   ROS_INFO("Task 3 complete");
-  removeAllCollisions();
   return true;
 
 }
@@ -564,10 +577,10 @@ void cw2::addBasket(const std::string& name, const geometry_msgs::Point& basket_
   geometry_msgs::Vector3 basket_dim;
   basket_dim.x = 0.37;
   basket_dim.y = 0.37;
-  basket_dim.z = 0.02;
+  basket_dim.z = 0.05;
 
   geometry_msgs::Point basket_pos_1 = basket_pos;
-  basket_pos_1.z = basket_pos.z + 0.02;
+  basket_pos_1.z = basket_pos.z;
 
   geometry_msgs::Quaternion basket_ori;
   basket_ori.w = 1.0;

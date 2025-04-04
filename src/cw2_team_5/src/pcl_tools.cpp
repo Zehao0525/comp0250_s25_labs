@@ -1,6 +1,7 @@
 #include "cw2_class.h"
 
 void cw2::point_cloud_callback(const sensor_msgs::PointCloud2ConstPtr& cloud_input_msg) {
+  ptcoud_updated = true;
     latest_cloud = cloud_input_msg;
     
   }
@@ -223,7 +224,7 @@ pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cw2::scanPlatform(
       // 移动到扫描位置
       Init_Pose target_pose;
       target_pose.position = goal_point;
-      bool mvstate = move_arm(target_pose);
+      bool mvstate = move_arm(target_pose, false);
       // ROS_INFO("移动到: [%.2f, %.2f] %s", 
       //          goal_point.x, goal_point.y, 
       //          mvstate ? "成功" : "失败");
@@ -232,6 +233,13 @@ pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cw2::scanPlatform(
         // ROS_WARN("移动失败，跳过该点");
         continue;
       }
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      ptcoud_updated = false;
+      while(!ptcoud_updated){
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+
       
       // 获取并处理点云数据
       pcl::PointCloud<pcl::PointXYZRGBA>::Ptr current_cloud = 

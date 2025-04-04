@@ -139,6 +139,7 @@ public:
   moveit::planning_interface::MoveGroupInterface hand_group_{"hand"};
 
   sensor_msgs::PointCloud2ConstPtr latest_cloud;
+  bool ptcoud_updated = false;
 
   bool move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian = false, int recursion_depth = 0, bool fast = true);
   
@@ -240,7 +241,7 @@ public:
 
   // void merge_clouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr new_cloud);
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr combined_cloud;
-  float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2);
+  float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr global_cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr global_cloud2);
   void delete_groud_plane(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr in_cloud, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr out_cloud);
   void filterPointCloudByHeight(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr input_cloud, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr output_cloud, float min_height, float max_height);
   void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
@@ -261,7 +262,8 @@ public:
   // 在类定义中的其他成员函数声明旁边添加
 void adjustPoseByShapeAndRotation(geometry_msgs::Pose& target_pose, 
   const std::string& shape_type, 
-  float rot_degree);
+  float rot_degree,
+  float obj_size = 0.02);
 
 
 

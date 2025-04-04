@@ -37,7 +37,6 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
 
     double fraction = arm_group_.computeCartesianPath(waypoints, 
                                                     0.01,    // 路径点之间的最大步长(eef_step)
-                                                    0.0,     // 跳跃阈值
                                                     trajectory);
     
     ROS_INFO("Cartesian path planning (%.2f%% achieved)", fraction * 100.0);
@@ -152,7 +151,7 @@ bool cw2::move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian, int rec
         ROS_INFO("Execution successful.");
         break;
       } else {
-        ROS_WARN("Execution failed with code: %d", exec_result);
+        //ROS_WARN("Execution failed with code: %d", exec_result);
       }
     }
   }
@@ -248,7 +247,7 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose&
     target_pos_down2.position = goal_loc;
     target_pos_down2.position.z = 0.41;
     // clear_constraint();
-    bool move_goal_success = move_arm(target_pos_down2);
+    bool move_goal_success = move_arm(target_pos_down2, false);
     
     clear_constraint();
     
@@ -259,13 +258,13 @@ void cw2::pick_and_place(const std::string& obj_name, const geometry_msgs::Pose&
     
     target_pos_down2.position = goal_loc;
     target_pos_down2.position.z = 0.25;
-    bool move_down_success2 = move_arm(target_pos_down2, true);
+    bool move_down_success2 = move_arm(target_pos_down2, false);
     
     bool open_gripper_success = move_gripper(1.0);
     
     target_pos_up2.position = goal_loc;
     target_pos_up2.position.z = 0.41;
-    bool move_up_success2 = move_arm(target_pos_up2, true);
+    bool move_up_success2 = move_arm(target_pos_up2, false);
 
     //set_constraint();
 }
@@ -379,7 +378,8 @@ void cw2::set_constraint() {
 
 void cw2::adjustPoseByShapeAndRotation(geometry_msgs::Pose& target_pose, 
   const std::string& shape_type, 
-  float rot_degree) {
+  float rot_degree, 
+  float obj_size) {
 // 旋转target_pose.orientation
 tf2::Quaternion q_orig, q_rot, q_new;
 tf2::convert(target_pose.orientation, q_orig);
@@ -395,21 +395,21 @@ float offset_y = 0.0;
 float rad_angle = rot_degree * M_PI / 180.0; // 角度转弧度
 
 if (shape_type == "cross") {
-offset_distance = 0.05;
-// 根据旋转角度计算在旋转坐标系中的x、y分量
-offset_x = offset_distance * cos(rad_angle);
-offset_y = offset_distance * sin(rad_angle);
+  offset_distance = obj_size * 1.5;
+  // 根据旋转角度计算在旋转坐标系中的x、y分量
+  offset_x = offset_distance * cos(rad_angle);
+  offset_y = offset_distance * sin(rad_angle);
 
 ROS_INFO("Cross offset: [x: %f, y: %f] (angle: %f deg)", offset_x, offset_y, rot_degree);
 
 } else if (shape_type == "nought") {
-offset_distance = 0.08;
-// 对于nought形状，偏移方向是垂直于旋转方向的
-// 相当于在旋转坐标系中的y轴方向上偏移
-offset_x = -offset_distance * sin(rad_angle); // 注意这里是-sin
-offset_y = offset_distance * cos(rad_angle);
+  offset_distance = obj_size * 2;
+  // 对于nought形状，偏移方向是垂直于旋转方向的
+  // 相当于在旋转坐标系中的y轴方向上偏移
+  offset_x = -offset_distance * sin(rad_angle); // 注意这里是-sin
+  offset_y = offset_distance * cos(rad_angle);
 
-ROS_INFO("Nought offset: [x: %f, y: %f] (angle: %f deg)", offset_x, offset_y, rot_degree);
+  ROS_INFO("Nought offset: [x: %f, y: %f] (angle: %f deg)", offset_x, offset_y, rot_degree);
 }
 
 // 应用计算出的偏移量
@@ -507,4 +507,5 @@ bool cw2::reset_arm(double min_height, double target_height)
   }
 
   set_z_constraint(0.4, 1.2); // 恢复Z轴约束
+  return true;
 }

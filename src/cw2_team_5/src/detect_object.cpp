@@ -142,6 +142,11 @@ ShapeDetectionResult detectShapeRotation(
         }
       
       }
+
+      // We try to use principle component analysis to find the orientation
+      
+
+
       // 本形状的最大重叠度和对应角度
       float shape_max_overlap = 0.0;
       float shape_best_angle = -1.0;
@@ -194,8 +199,10 @@ ShapeDetectionResult detectShapeRotation(
 
 
 
-float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2) {
+float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr global_cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr global_cloud2) {
   // 将两个点云平移到原点
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1(new pcl::PointCloud<pcl::PointXYZRGBA>(*global_cloud1));
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2(new pcl::PointCloud<pcl::PointXYZ>(*global_cloud2));
   translatePointCloudToOrigin(cloud1);
   translatePointCloudToOrigin(cloud2);
   
@@ -228,7 +235,7 @@ float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl::Poin
   pcl::KdTreeFLANN<pcl::PointXYZ> kdtree2;
   kdtree2.setInputCloud(cloud2_xy);
 
-  float distance_threshold = 0.01; // 距离阈值，单位：米
+  float distance_threshold = 0.003; // voxel grids have size 0.002. max distance / diagnal being 0.0028. 
   
   // 第一步：从cloud2到cloud1搜索
   std::vector<bool> cloud2_has_match(cloud2->points.size(), false);
@@ -272,18 +279,19 @@ float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl::Poin
   int cloud1_matched = std::count(cloud1_has_match.begin(), cloud1_has_match.end(), true);
   int cloud2_matched = std::count(cloud2_has_match.begin(), cloud2_has_match.end(), true);
   
-  // // 并集计算 = 总点数 - 匹配的点数
-  // int union_count = cloud1->points.size() + cloud2->points.size() - (cloud1_matched + cloud2_matched);
-  // // 交集计算 = 匹配的点数
-  int intersection_count = cloud1_matched + cloud2_matched;
+  // Find the total number of points that has matches
+  int total_matches = cloud1_matched + cloud2_matched;
 
 
   // int intersection_count = cloud1_matched; // 或 cloud2_matched
-  int union_count = cloud1->points.size() + cloud2->points.size() - intersection_count;
+  int union_count = cloud1->points.size() + cloud2->points.size();
 
   
-  // 计算IoU(Intersection over Union)
-  float iou = static_cast<float>(intersection_count) / static_cast<float>(union_count);
+  // Compute the ratio of matches vs the sum of the size of the two pointclouds
+  // We can't assume they are classes and compute union, because the points are not bijections
+  float iou = static_cast<float>(total_matches) / static_cast<float>(union_count);
+
+
   
   // ROS_INFO("IoU(双向): %.4f (Intersection: %d, Union: %d)", iou, intersection_count, union_count);
   // ROS_INFO("cloud1匹配点: %d/%zu, cloud2匹配点: %d/%zu", 
@@ -343,7 +351,6 @@ void processShapeCombination(
   ShapeDetectionResult& global_result)
 {
   // 生成参考形状点云
-  ROS_INFO("Generating shape pointcloud...");
   pcl::PointCloud<pcl::PointXYZ>::Ptr shape_checker_ptr;
   if (shape_type == "cross") {
     shape_checker_ptr = generateCrossShapePointCloud(size);
@@ -352,39 +359,51 @@ void processShapeCombination(
   }
 
 
-  float shape_max_overlap_rough = 0.0;
-  float shape_best_angle_rough = -1.0;
+  // float shape_max_overlap_rough = 0.0;
+  // float shape_best_angle_rough = -1.0;
+  // // Roughly search for a best match with error bound in less than 5 degrees
+  // for (float degrees = 0; degrees < 90; degrees += 5.0) {
+  //   Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+  //   transform.rotate(Eigen::AngleAxisf(degrees * M_PI / 180, Eigen::Vector3f::UnitZ()));
 
+  //   pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+  //   pcl::transformPointCloud(*shape_checker_ptr, *transformed_cloud, transform);
 
-  ROS_INFO("Starting Rough orientation search...");
-  // Roughly search for a best match with error bound in less than 5 degrees
-  for (float degrees = 0; degrees < 90; degrees += 5.0) {
-    Eigen::Affine3f transform = Eigen::Affine3f::Identity();
-    transform.rotate(Eigen::AngleAxisf(degrees * M_PI / 180, Eigen::Vector3f::UnitZ()));
+  //   float overlap = calculateOverlap(obj_cloud_ptr, transformed_cloud);
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::transformPointCloud(*shape_checker_ptr, *transformed_cloud, transform);
+  //   if (overlap > shape_max_overlap_rough) {
+  //     shape_max_overlap_rough = overlap;
+  //     shape_best_angle_rough = degrees;
+  //   }
+  // }
 
-    float overlap = calculateOverlap(obj_cloud_ptr, transformed_cloud);
+  // Search for the rough orientation of the shape using PCA
+  // Find Principle component
+  // First find covarience
+  Eigen::Vector4f centroid;
+  Eigen::Matrix<float, 3,3> cov_mat;
+  pcl::compute3DCentroid(*obj_cloud_ptr, centroid);
+  pcl::computeCovarianceMatrixNormalized(*obj_cloud_ptr, centroid, cov_mat);
 
-    if (overlap > shape_max_overlap_rough) {
-      shape_max_overlap_rough = overlap;
-      shape_best_angle_rough = degrees;
-    }
-  }
+  // Second get principle component
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(cov_mat);
+  Eigen::Matrix3f eigen_vectors = eigen_solver.eigenvectors();
+  Eigen::Vector3f principle_axis = eigen_vectors.col(2);
 
-
-  ROS_INFO("Starting Fine orientation search...");
+  float shape_best_angle_rough = std::atan2(principle_axis.y(), principle_axis.x()) * 180.0 / M_PI;
+  shape_best_angle_rough = (shape_type == "cross") ? fmod(fmod(shape_best_angle_rough,90.0)+90.0,90.0) : fmod(fmod(shape_best_angle_rough + 45.0,90.0)+90.0,90.0);
   // 本形状的最大重叠度和对应角度
   float shape_max_overlap = 0.0;
   float shape_best_angle = -1.0;
   float degrees = 0.0;
   
-  // 测试0-90度范围内的所有角度
-  // Find the more accurate shape orientation by testing within +- 5 degrees
-  for (float degrees_it = (shape_best_angle_rough-5); degrees_it < (shape_best_angle_rough+5); degrees_it += angle_step) {
+  // Testing angles in +- 6 degrees
+  // The principle axis isnot aligned with the corsses, it will be aligned with then diagnals of one of the two the 1*5 rectangles that froms the cross
+  // arctan (1/5) is roughly 11.3 degrees. 
+  // We test +11.3, -11.3, and 0
+  for (float degrees_it = (shape_best_angle_rough-11.3); degrees_it < (shape_best_angle_rough+11.4); degrees_it += 11.3) {
     // 创建旋转变换
-    degrees = fmod(degrees_it,90.0);
+    degrees = fmod(fmod(degrees_it,90.0)+90.0,90.0);
     Eigen::Affine3f transform = Eigen::Affine3f::Identity();
     transform.rotate(Eigen::AngleAxisf(degrees * M_PI / 180, Eigen::Vector3f::UnitZ()));
 
@@ -399,9 +418,33 @@ void processShapeCombination(
     }
   }
 
+  // The above test assumes perfect pointcloud, but there may be noise
+  // If our detection is good enough to be considered a "Hit", but not great in overlap, we do a finer search. 
+  if(shape_max_overlap > 0.6 && shape_max_overlap < 0.8){
+    for (float degrees_it = (shape_best_angle_rough-10); degrees_it < (shape_best_angle_rough+10.1); degrees_it += angle_step) {
+      // 创建旋转变换
+      if(degrees_it < 1e-8 && degrees_it > -1e-8){
+        continue;
+      }
+      degrees = fmod(fmod(degrees_it,90.0)+90.0,90.0);
+      Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+      transform.rotate(Eigen::AngleAxisf(degrees * M_PI / 180, Eigen::Vector3f::UnitZ()));
+  
+      pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+      pcl::transformPointCloud(*shape_checker_ptr, *transformed_cloud, transform);
+  
+      float overlap = calculateOverlap(obj_cloud_ptr, transformed_cloud);
+  
+      if (overlap > shape_max_overlap) {
+        shape_max_overlap = overlap;
+        shape_best_angle = degrees;
+      }
+    }
+  }
+
   // 计算点云的几何中心
-  Eigen::Vector4f centroid;
-  pcl::compute3DCentroid(*obj_cloud_ptr, centroid);
+  // Eigen::Vector4f centroid;
+  // pcl::compute3DCentroid(*obj_cloud_ptr, centroid);
 
   // 用锁保护全局最优结果的更新
   std::lock_guard<std::mutex> lock(result_mutex);
@@ -639,7 +682,9 @@ void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::
             // 形状识别
             ROS_INFO("Matching shape to orientation, processing...");
             ShapeDetectionResult detection_result = detectShapeRotation_multi(cluster);
-            if (detection_result.overlap_score < 10) {
+            // At least 90% of the points in both pointclouds has to find matches
+            // For we to consider this a Successful match
+            if (detection_result.overlap_score < 0.6) {
                 ROS_INFO("Invalid shape detection result, skipping");
                 continue;
             }

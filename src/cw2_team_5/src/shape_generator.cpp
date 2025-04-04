@@ -14,7 +14,8 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr generateCrossShapePointCloud(const float cel
     const int grid_size = 5;  // 5x5 格子
     // const float cell_size = 40.0f; // 每个格子40mm
     const float height = 0.04;  // 高度40mm
-    const int num_points_per_cell = 10; // 每个格子的点密度（越大越密集）
+    const float point_density = 0.002;  // Matches the Voxel grid
+    const int num_points_per_cell = cell_size / point_density; // 每个格子的点密度（越大越密集）
 
     // 生成点云
     for (int i = 0; i < grid_size; ++i) {
@@ -58,7 +59,8 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr generateOughtShapePointCloud(const float cel
     const int grid_size = 5;  // 5x5 格子
     // const float cell_size = 40.0f; // 每个格子40mm
     const float height = 0.04;  // 高度40mm
-    const int num_points_per_cell = 10; // 每个格子的点密度（越大越密集）
+    const float point_density = 0.002;  // Matches the Voxel grid
+    const int num_points_per_cell = cell_size / point_density; // 每个格子的点密度（越大越密集）
 
     // 生成点云
     for (int i = 0; i < grid_size; ++i) {
