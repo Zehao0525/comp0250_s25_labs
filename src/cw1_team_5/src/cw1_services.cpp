@@ -76,7 +76,7 @@ bool cw1::task1_callback(cw1_world_spawner::Task1Service::Request &request,
   // // add the basket
   // addCollisionObject(basket_name, request.goal_loc.point, basket_dim, basket_ori);
 
-  set_constraint();
+  setConstraint();
 
   // We specify waypoints for the arm trajectory
   geometry_msgs::Pose init_pos, target_pos, lift_pos, goal_pos;
@@ -104,19 +104,19 @@ bool cw1::task1_callback(cw1_world_spawner::Task1Service::Request &request,
   return true;
 
   // Open gripper
-  bool opgrip_success = move_gripper(1.0);
+  bool opgrip_success = moveGripper(1.0);
   // Move into object position
-  bool mvarm_success = move_arm(target_pos);
+  bool mvarm_success = moveArm(target_pos);
   // Close gripper
   remove_collision_object(cube_name_);
-  bool clgrip_success = move_gripper(0.0);
+  bool clgrip_success = moveGripper(0.0);
   
   // Move to lifted position
-  bool mvarm_success2 = move_arm(lift_pos);
+  bool mvarm_success2 = moveArm(lift_pos);
   // Move to goal position
-  bool mvarm_success3 = move_arm(goal_pos);
+  bool mvarm_success3 = moveArm(goal_pos);
   // Open gripper
-  bool opgrip_success2 = move_gripper(1.0);
+  bool opgrip_success2 = moveGripper(1.0);
   // Determine success
   //response.success = opgrip_success && mvarm_success && clgrip_success && mvarm_success2 && opgrip_success2;
 
@@ -163,7 +163,7 @@ bool cw1::task2_callback(cw1_world_spawner::Task2Service::Request &request,
     target_obs_pose.position = target.position;
     target_obs_pose.position.z = 0.5;
     ROS_INFO("Moving arm");
-    mvarm_success = move_arm(target_obs_pose);
+    mvarm_success = moveArm(target_obs_pose);
 
     // Here we insert a list of 
     std::vector<DetectedObject> detected_objects;
@@ -172,7 +172,7 @@ bool cw1::task2_callback(cw1_world_spawner::Task2Service::Request &request,
     // The whole object detction section
     wait_for_new_point_cloud();
     convert_ptcld_to_world(cloud_filtered_, cloud_filtered2_);
-    detect_objects(cloud_filtered2_, detected_objects);
+    detectObjects(cloud_filtered2_, detected_objects);
 
     // Find closest color
     double min_dist_sq = std::numeric_limits<double>::max();
@@ -230,7 +230,7 @@ bool cw1::task3_callback(cw1_world_spawner::Task3Service::Request &request,
   reset_task();
   add_plane(plane_name_);
   add_clarance("Clearance");
-  set_constraint();
+  setConstraint();
 
   // Step 1: mapping the scene
   // We will take visualizations every 0.2 m
@@ -274,7 +274,7 @@ bool cw1::task3_callback(cw1_world_spawner::Task3Service::Request &request,
                 target.position.x,
                 target.position.y,
                 target.position.z);
-        move_arm(target);
+        moveArm(target);
     
         // Scanning
         wait_for_new_point_cloud();
@@ -290,7 +290,7 @@ bool cw1::task3_callback(cw1_world_spawner::Task3Service::Request &request,
     // Step 2: detect all the objects in the scene
     std::vector<DetectedObject> detected_objects;
     ROS_INFO("Detecting Object");
-    detect_objects(cloud_world_, detected_objects);
+    detectObjects(cloud_world_, detected_objects);
 
     // Step 3: find out which baskets we have, and pace cubes with the right color into the right basket
     // Populate basket map when doing the first complete scene scan

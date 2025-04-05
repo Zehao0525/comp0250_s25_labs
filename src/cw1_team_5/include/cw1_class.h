@@ -82,7 +82,7 @@ struct DetectedObject
 };
 
 // Condition function 
-bool enforce_color_similarity(const PointT& a, const PointT& b, float squared_dist);
+bool enforceColorSimilarity(const PointT& a, const PointT& b, float squared_dist);
 
 class cw1
 {
@@ -145,7 +145,7 @@ public:
 
   /// @brief function to add constraints. 
   void
-  set_constraint();
+  setConstraint();
 
   /// @brief function to pick up an object and move it somewhere else. 
   /// @param obj_name std::string name of object to pick up.
@@ -160,7 +160,7 @@ public:
   /// @param in_cloud_ptr PointCPtr Input pointcloud
   /// @param detected_objects std::vector<DetectedObject> Output list of objects
   void 
-  detect_objects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects);
+  detectObjects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects);
 
   /// @brief Given cluster representing object, find its position 
   /// @param in_cloud_ptr PointCPtr Input pointcloud representing object
@@ -187,13 +187,13 @@ public:
   /// @param target_pose geometry_msgs::Pose target pose to approach
   /// @return true
   bool 
-  move_arm(geometry_msgs::Pose& target_pose);
+  moveArm(geometry_msgs::Pose& target_pose);
 
   /// @brief Movelt function to open/close gripper.
   /// @param width float the width between two fingers.
   /// @return true
   bool 
-  move_gripper(float width);
+  moveGripper(float width);
 
   /// @brief Movelt function to remove object in motion planning.
   /// @param object_name std::string name of object to be removed.

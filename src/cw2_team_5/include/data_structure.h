@@ -7,9 +7,9 @@
 #include <Eigen/Dense>
 #include <shape_msgs/SolidPrimitive.h>
 
-class Init_Pose : public geometry_msgs::Pose {
+class InitPose : public geometry_msgs::Pose {
 public:
-    Init_Pose() {
+    InitPose() {
 
     orientation.x = 0.9239;
     orientation.y = -0.3827;
@@ -27,7 +27,7 @@ public:
   //   position = pose.position;
   // }
   
-  Init_Pose& operator=(const geometry_msgs::Pose& pose) {
+  InitPose& operator=(const geometry_msgs::Pose& pose) {
     this->position = pose.position;
     this->orientation = pose.orientation;
     return *this;

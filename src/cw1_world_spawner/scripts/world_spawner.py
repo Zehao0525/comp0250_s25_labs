@@ -339,8 +339,8 @@ class Task1(Task):
 
     success = self.prepare_for_task_request(self.service_to_request)
     rospy.sleep(rospy.Duration(1))
-    init_pose = self.models['boxobject1'].get_model_state().pose
-    if success: resp = self.send_task1_request(init_pose)
+    InitPose = self.models['boxobject1'].get_model_state().pose
+    if success: resp = self.send_task1_request(InitPose)
     else: rospy.logerr("Task Request failed - not advertised")
 
     return

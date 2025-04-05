@@ -198,18 +198,18 @@ This README is meant to serve as a guide to build, run, and understand the contr
 - `remove_all_collisions` - Clear all collision objects
 
 #### Motion Planning and Control (cw1_tools.cpp)
-- `move_arm` - Plan and move arm to target pose
-- `move_gripper` - Control gripper opening and closing
-- `set_constraint` - Set joint constraints for the robotic arm
+- `moveArm` - Plan and move arm to target pose
+- `moveGripper` - Control gripper opening and closing
+- `setConstraint` - Set joint constraints for the robotic arm
 - `pick_place_cube` - Advanced pick and place functionality, integrating multiple steps
 
 #### Point Cloud Processing and Analysis (cw1_tools.cpp)
 - `apply_voxel_filter` - Apply voxel grid filtering to reduce point cloud density
 - `cloud_callback` - Process subscribed camera point cloud data
 - `convert_ptcld_to_world` - Transform point cloud to world coordinate system
-- `detect_objects` - Point cloud clustering and object recognition (color, type determination)
+- `detectObjects` - Point cloud clustering and object recognition (color, type determination)
 - `wait_for_new_point_cloud` - Synchronous waiting for new point cloud data
-- `enforce_color_similarity` - Color similarity judgment function for clustering
+- `enforceColorSimilarity` - Color similarity judgment function for clustering
 
 #### Other Helper Functions
 - `reset_task` - Reset task state and related variables

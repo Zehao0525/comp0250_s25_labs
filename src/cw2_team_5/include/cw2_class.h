@@ -115,7 +115,7 @@ public:
   t3_callback(cw2_world_spawner::Task3Service::Request &request,
     cw2_world_spawner::Task3Service::Response &response);
 
-  void point_cloud_callback(const sensor_msgs::PointCloud2ConstPtr& cloud_input_msg);
+  void pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& cloud_input_msg);
   void publishPointCloudTimerCallback(const ros::TimerEvent& event);
 
   /* ----- class member variables ----- */
@@ -141,7 +141,7 @@ public:
   sensor_msgs::PointCloud2ConstPtr latest_cloud;
   bool ptcoud_updated = false;
 
-  bool move_arm(geometry_msgs::Pose& target_pose, bool use_cartesian = false, int recursion_depth = 0, bool fast = true);
+  bool moveArm(geometry_msgs::Pose& target_pose, bool use_cartesian = false, int recursion_depth = 0, bool fast = true);
   
   pcl::PCLPointCloud2 pcl_pc_;
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr convertToPCL(
@@ -168,9 +168,9 @@ public:
   // move functions
   /////////////////////////////
 
-  bool move_gripper(float width);
-  void set_constraint();
-  void clear_constraint();
+  bool moveGripper(float width);
+  void setConstraint();
+  void clearConstraint();
 
   /// @brief function to add the ground plane into motion planning for collision avoidence.
   /// @param object_name std::string name of the plane added
@@ -183,10 +183,6 @@ public:
   void
   addBasket(const std::string& name, const geometry_msgs::Point& basket_pos);
 
-  /// @brief function to add constraints to limit pandas movement
-  /// This will make the actions of the arm smoother, at the expense of possibly more planning (or maybe not)
-  void
-  setConstraint();
 
   /// @brief Movelt function to remove object in motion planning.
   /// @param object_name std::string name of object to be removed.
@@ -209,7 +205,7 @@ public:
   void
   removeAllCollisions();
 
-  void pick_and_place(const std::string& obj_name, 
+  void pickAndPlace(const std::string& obj_name, 
     const geometry_msgs::Point& obj_loc, 
     const geometry_msgs::Point& goal_loc,
     std::vector<std::string> collision_obj_parts) ;
@@ -220,8 +216,8 @@ public:
   /////////////////
   void genRect(const std::string& name, const float x, const float y, const float dim_x, const float dim_y, const float theta);
   void removeCollisionObjects(std::vector<std::string> obj_names);
-  std::vector<std::string> genNoughtObj(const float cell_size, const float x, const float y, const float theta);
-  std::vector<std::string> genCrossObj(const float cell_size, const float x, const float y, const float theta);
+  std::vector<std::string> genNoughtObj(const float cell_size, const float x, const float y, const float theta, const std::string prefix = "");
+  std::vector<std::string> genCrossObj(const float cell_size, const float x, const float y, const float theta, const std::string prefix = "");
 
   /////////////////
   // Temporary
@@ -241,12 +237,11 @@ public:
 
   // void merge_clouds(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr new_cloud);
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr combined_cloud;
-  float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr global_cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr global_cloud2);
-  void delete_groud_plane(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr in_cloud, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr out_cloud);
+  float calculateOverlapOld(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr global_cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr global_cloud2);
   void filterPointCloudByHeight(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr input_cloud, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr output_cloud, float min_height, float max_height);
-  void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
-  void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud);
-  void pick_and_place(const std::string& obj_name, const geometry_msgs::Pose& obj_loc, const geometry_msgs::Point& goal_loc, std::vector<std::string> collision_obj_parts) ;
+  void translatePointCloudToOriginOld(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
+  void translatePointCloudToOriginOld(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud);
+  void pickAndPlace(const std::string& obj_name, const geometry_msgs::Pose& obj_loc, const geometry_msgs::Point& goal_loc, std::vector<std::string> collision_obj_parts) ;
 
 
 
@@ -268,13 +263,13 @@ void adjustPoseByShapeAndRotation(geometry_msgs::Pose& target_pose,
 
 
   void clearObstacles();
-  void addObstacle(const Obstacle& obstacle);
+  void addObstacle(const Obstacle& obstacle, const int id);
   std::vector<Obstacle> obstacles_;  // 全局障碍物列表
 
-  bool reset_arm(double min_height = 0.4, double target_height = 0.41);
-  // void reset_arm();
+  bool resetArm(double min_height = 0.4, double target_height = 0.41);
+  // void resetArm();
 private:
-  void set_z_constraint(double min_height = 0.4, double max_height = 1.2);
+  void setZConstraint(double min_height = 0.4, double max_height = 1.2);
   // moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
 
   void checkTrajectoryTimestamps(moveit_msgs::RobotTrajectory& trajectory);

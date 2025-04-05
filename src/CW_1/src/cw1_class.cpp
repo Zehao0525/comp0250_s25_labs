@@ -131,7 +131,7 @@ cw1::t1_callback(cw1_world_spawner::Task1Service::Request &request,
   addCollisionObject(basket_name, request.goal_loc.point, basket_dimension, basket_orientation);
 
   // define the constraint to joints
-  set_constraint ();
+  setConstraint ();
 
   // move the arm to achieve pick and place
   geometry_msgs::Pose target_cube, target_cube_ahead, target_goal, intermedia;
@@ -313,7 +313,7 @@ cw1::t3_callback(cw1_world_spawner::Task3Service::Request &request,
   purple_basket.clear();
 
   // define the constraint to joints
-  set_constraint ();
+  setConstraint ();
 
   // move the arm to the target pose
   geometry_msgs::Pose target_pose_1, target_pose_2;
@@ -372,9 +372,9 @@ cw1::t3_callback(cw1_world_spawner::Task3Service::Request &request,
   add_collision();
 
   ROS_INFO("Pick and place starts");
-  pick_and_place(red_cube, red_basket, "red_cube");
-  pick_and_place(blue_cube, blue_basket, "blue_cube");
-  pick_and_place(purple_cube, purple_basket, "purple_cube");
+  pickAndPlace(red_cube, red_basket, "red_cube");
+  pickAndPlace(blue_cube, blue_basket, "blue_cube");
+  pickAndPlace(purple_cube, purple_basket, "purple_cube");
 
 
 
@@ -1204,7 +1204,7 @@ cw1::remove_all_collisions ()
 ////////////////////////////////////////////////////////////////////////////////
 
 void
-cw1::pick_and_place (std::vector<geometry_msgs::Point> cube, 
+cw1::pickAndPlace (std::vector<geometry_msgs::Point> cube, 
                   std::vector<geometry_msgs::Point> basket,
                   std::string cube_name)
 {
@@ -1255,7 +1255,7 @@ cw1::pick_and_place (std::vector<geometry_msgs::Point> cube,
 ////////////////////////////////////////////////////////////////////////////////
 
 void
-cw1::set_constraint ()
+cw1::setConstraint ()
 {
   joint_1.joint_name = "panda_joint1";
   joint_1.position = 0.0;

@@ -155,7 +155,7 @@ public:
 
   /// @brief function to add constraints. 
   void
-  set_constraint ();
+  setConstraint ();
 
 
   /// @brief function to pick up an object and move it somewhere else. 
@@ -169,7 +169,7 @@ public:
   /// @param in_cloud_ptr PointCPtr Input pointcloud
   /// @param detected_objects std::vector<DetectedObject> Output list of objects
   void 
-  detect_objects(PointCPtr &in_cloud_ptr, std::vector<DetectedObject>& detected_objects);
+  detectObjects(PointCPtr &in_cloud_ptr, std::vector<DetectedObject>& detected_objects);
 
   /// @brief Given cluster representing object, find its position 
   /// @param in_cloud_ptr PointCPtr Input pointcloud representing object

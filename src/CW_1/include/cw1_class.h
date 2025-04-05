@@ -207,13 +207,13 @@ public:
   remove_all_collisions ();
 
   void
-  pick_and_place (std::vector<geometry_msgs::Point> cube, 
+  pickAndPlace (std::vector<geometry_msgs::Point> cube, 
                   std::vector<geometry_msgs::Point> basket,
                   std::string cube_name);
 
   /// @brief set constraint to the joint rotating angle
   void
-  set_constraint ();
+  setConstraint ();
 
   /* ----- class member variables ----- */
 

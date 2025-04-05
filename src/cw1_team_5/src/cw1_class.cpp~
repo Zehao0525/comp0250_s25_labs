@@ -107,7 +107,7 @@ cw1::t1_callback(cw1_world_spawner::Task1Service::Request &request,
   // add the basket
   addCollisionObject(basket_name, request.goal_loc.point, basket_dim, basket_ori);
 
-  set_constraint ();
+  setConstraint ();
 
   // We specify waypoints for the arm trajectory
   geometry_msgs::Pose init_pos, target_pos, lift_pos, goal_pos;
@@ -197,7 +197,7 @@ cw1::t2_callback(cw1_world_spawner::Task2Service::Request &request,
     // Here we insert a list of 
     std::vector<DetectedObject> detected_objects;
     ROS_INFO("Detecting Object");
-    detect_objects(g_cloud_filtered, detected_objects);
+    detectObjects(g_cloud_filtered, detected_objects);
 
     // Find closest color
     double min_dist_sq = std::numeric_limits<double>::max();
@@ -535,7 +535,7 @@ cw1::cloudCallBack
 ////////////////////////////////////////////////////////////////////////////////
 
 void
-cw1::set_constraint ()
+cw1::setConstraint ()
 {
   joint_1.joint_name = "panda_joint1";
   joint_1.position = 0.0;
@@ -600,7 +600,7 @@ cw1::pick_place_cube(std::string obj_name, geometry_msgs::Point obj_loc, geometr
   ROS_INFO("picking up and placing: %s", obj_name.c_str());
 
   // Set constraint
-  set_constraint ();
+  setConstraint ();
 
   // We specify waypoints for the arm trajectory
   geometry_msgs::Pose init_pos, target_pos, lift_pos, goal_pos;
@@ -742,7 +742,7 @@ void cw1::convert_ptcld_to_world(PointCPtr input_cloud, const std::string& targe
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void cw1::detect_objects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects){
+void cw1::detectObjects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects){
 
 
   // --- 0. Use Voxels to filter the pointcloud
@@ -901,7 +901,7 @@ void cw1::detect_objects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& d
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void cw1::detect_objects_bak(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects){
+void cw1::detectObjects_bak(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects){
 
 
   // --- 0. Use Voxels to filter the pointcloud

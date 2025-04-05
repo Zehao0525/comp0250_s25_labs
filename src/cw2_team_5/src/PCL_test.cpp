@@ -7,11 +7,11 @@
 
 
 int main(int argc, char** argv) {
-    // 初始化ROS节点
+    // Init ros node
     ros::init(argc, argv, "pcl_test_node");
     ros::NodeHandle nh;
     
-    // 检查命令行参数
+    // Check command line number
     // if (argc < 2) {
     //     std::cout << "用法: " << argv[0] << " <pcd_file_path>" << std::endl;
     //     return -1;
@@ -19,10 +19,10 @@ int main(int argc, char** argv) {
     
     argv[1] = "./task3_scan_result.pcd";
 
-    // 创建PCL点云对象
+    // Create PCL
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
     
-    // 加载PCD文件
+    // Load PCD
     std::cout << "正在加载点云文件: " << argv[1] << std::endl;
     if (pcl::io::loadPCDFile<pcl::PointXYZRGBA>(argv[1], *cloud) == -1) {
         std::cerr << "无法加载文件: " << argv[1] << std::endl;
@@ -31,22 +31,22 @@ int main(int argc, char** argv) {
     
     std::cout << "成功加载点云，包含 " << cloud->points.size() << " 个点。" << std::endl;
     
-    // 过滤NaN值
+    // Filter Nans
     std::vector<int> indices;
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGBA>);
     pcl::removeNaNFromPointCloud(*cloud, *cloud_filtered, indices);
     std::cout << "过滤NaN后点云包含 " << cloud_filtered->points.size() << " 个点。" << std::endl;
     
     
-    // 创建检测结果向量
+    // Create object detection 
     std::vector<ShapeDetectionResult> detected_objects;
     
-    // 执行物体检测
+    // Execute object detecion
     std::cout << "开始执行物体检测..." << std::endl;
     std::vector<Obstacle> obstacles;
-    detect_objects(cloud_filtered, detected_objects, obstacles);
+    detectObjects(cloud_filtered, detected_objects, obstacles);
     
-    // 显示检测结果
+    // Display results
     std::cout << "\nDetected " << detected_objects.size() << " objects:" << std::endl;
     for (size_t i = 0; i < detected_objects.size(); i++) {
         const auto& obj = detected_objects[i];
@@ -60,13 +60,13 @@ int main(int argc, char** argv) {
         std::cout << std::endl;
     }
 
-    // 添加：打印障碍物信息
+    // Print obstacle info
 std::cout << "\nObstacles detected: " << obstacles.size() << std::endl;
 for (size_t i = 0; i < obstacles.size(); i++) {
     const auto& obstacle = obstacles[i];
     std::cout << "Obstacle #" << i+1 << ":" << std::endl;
     
-    // 打印形状类型
+    // Print shape
     std::cout << "  Shape type: ";
     switch(obstacle.obstacle.type) {
         case shape_msgs::SolidPrimitive::BOX:
@@ -94,7 +94,7 @@ for (size_t i = 0; i < obstacles.size(); i++) {
             std::cout << "UNKNOWN (" << obstacle.obstacle.type << ")" << std::endl;
     }
     
-    // 打印位置和方向
+    // print position
     std::cout << "  Position: [" 
               << obstacle.obstacle_pose.position.x << ", "
               << obstacle.obstacle_pose.position.y << ", "

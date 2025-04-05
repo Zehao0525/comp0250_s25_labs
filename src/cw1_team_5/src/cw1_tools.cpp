@@ -17,7 +17,7 @@ void cw1::reset_task() {
 //            Helper functions
 // =====================================================
 
-bool cw1::move_arm(geometry_msgs::Pose& target_pose) {
+bool cw1::moveArm(geometry_msgs::Pose& target_pose) {
   ROS_INFO("Setting pose target.");
   arm_group_.setPoseTarget(target_pose);
 
@@ -56,7 +56,7 @@ bool cw1::move_arm(geometry_msgs::Pose& target_pose) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-bool cw1::move_gripper(float width) {
+bool cw1::moveGripper(float width) {
   // safety checks in case width exceeds safe values
   if (width > gripper_open_) {
     width = gripper_open_;
@@ -119,7 +119,7 @@ void cw1::cloud_callback(const sensor_msgs::PointCloud2ConstPtr& cloud_input_msg
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void cw1::set_constraint() {
+void cw1::setConstraint() {
   joint_constraints_[0].joint_name = "panda_joint1";
   joint_constraints_[0].position = 0.0;
   joint_constraints_[0].tolerance_above = M_PI * 0.45;
@@ -180,7 +180,7 @@ void cw1::pick_place_cube(const std::string& obj_name,
   ROS_INFO("picking up and placing: %s", obj_name.c_str());
 
   // Set constraint
-  set_constraint();
+  setConstraint();
 
   // We specify waypoints for the arm trajectory
   geometry_msgs::Pose target_pos, lift_pos, goal_pos;
@@ -207,26 +207,26 @@ void cw1::pick_place_cube(const std::string& obj_name,
 
   // Move into object position
   // Move to lifted position
-  bool mvarm_success = move_arm(lift_pos);
+  bool mvarm_success = moveArm(lift_pos);
 
   // Open gripper
-  bool opgrip_success = move_gripper(1.0);
+  bool opgrip_success = moveGripper(1.0);
 
-  mvarm_success = mvarm_success && move_arm(target_pos);
+  mvarm_success = mvarm_success && moveArm(target_pos);
   // Close gripper
   remove_collision_object(obj_name);
-  bool clgrip_success = move_gripper(0.0);
+  bool clgrip_success = moveGripper(0.0);
   
   // Move to lifted position
-  mvarm_success = mvarm_success && move_arm(lift_pos);
+  mvarm_success = mvarm_success && moveArm(lift_pos);
   // Move to goal position
-  mvarm_success = mvarm_success && move_arm(goal_pos);
+  mvarm_success = mvarm_success && moveArm(goal_pos);
   // Open gripper
-  bool opgrip_success2 = move_gripper(0.8);
+  bool opgrip_success2 = moveGripper(0.8);
 }
 
 // Condition function 
-bool enforce_color_similarity(const PointT& a, const PointT& b, float /*squared_dist*/) {
+bool enforceColorSimilarity(const PointT& a, const PointT& b, float /*squared_dist*/) {
   float b_scale = std::max({b.r, b.g, b.b});
   float a_scale = std::max({a.r, a.g, a.b});
   float tol = 0.05f * b_scale * a_scale;
@@ -293,7 +293,7 @@ void cw1::convert_ptcld_to_world(PointCPtr& input_cloud, PointCPtr& transformed_
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void cw1::detect_objects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects) {
+void cw1::detectObjects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& detected_objects) {
   // --- 1. Cluster Extraction ---
   pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
   tree->setInputCloud(in_cloud_ptr);
@@ -302,7 +302,7 @@ void cw1::detect_objects(PointCPtr& in_cloud_ptr, std::vector<DetectedObject>& d
   std::vector<pcl::PointIndices> cluster_indices;
   pcl::ConditionalEuclideanClustering<PointT> cec(true);   // 'true' to allow cluster size filtering
   cec.setInputCloud(in_cloud_ptr);
-  cec.setConditionFunction(&enforce_color_similarity);
+  cec.setConditionFunction(&enforceColorSimilarity);
   cec.setClusterTolerance(0.02f);                        // 5mm spatial cluster radius
   cec.setMinClusterSize(25);  
   cec.setSearchMethod(tree); 

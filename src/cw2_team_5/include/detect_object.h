@@ -5,7 +5,7 @@
 #include "cw2_class.h"
 #include "data_structure.h"
 
-void detect_objects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::vector<ShapeDetectionResult>& detected_objects, 
+void detectObjects(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& in_cloud_ptr, std::vector<ShapeDetectionResult>& detected_objects, 
     std::vector<Obstacle>& obstacles);
 
 
@@ -15,11 +15,7 @@ void subtractPointCloud(
     double distance_threshold);
 
 
-static bool enforce_color_similarity(const pcl::PointXYZRGBA& a, const pcl::PointXYZRGBA& b, float /*squared_dist*/) ;
-
-ShapeDetectionResult detectShapeRotation(
-    const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& obj_cloud_ptr, 
-    float angle_step = 0.5) ;
+static bool enforceColorSimilarity(const pcl::PointXYZRGBA& a, const pcl::PointXYZRGBA& b, float /*squared_dist*/) ;
 
 float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2);
 void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud);
@@ -50,7 +46,7 @@ void processShapeCombination(
     float angle_step,
     ShapeDetectionResult& global_result);
 
-ShapeDetectionResult detectShapeRotation_multi(
+ShapeDetectionResult detectShapeRotationMulti(
     const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& obj_cloud_ptr,
     float angle_step = 0.5);
 #endif // end of include guard for cw2_CLASS_H_
