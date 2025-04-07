@@ -21,7 +21,6 @@ bool cw2::moveArm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recu
   bool exec_success = false;
 
   // Use cartesian path finding
-  // We didn't decide to use this in the end because its velosity is uncntrolable
   if (use_cartesian) {
     ROS_INFO("Using Cartesian path planning");
     
@@ -210,7 +209,7 @@ void cw2::pickAndPlace(const std::string& obj_name, const geometry_msgs::Pose& o
     clearConstraint();
     target_pos_down = obj_loc;
     target_pos_down.position.z = 0.04 + 0.11; //estimated good grasping position
-    bool move_down_success = moveArm(target_pos_down, true, 0, false);
+    bool move_down_success = moveArm(target_pos_down, false, 0, false); //Cartisian mode does not respect collision objects. We want to "see" the ground plane
     
     removeCollisionObjects(collision_obj_parts);
     bool close_gripper_success = moveGripper(0.0);
@@ -229,7 +228,7 @@ void cw2::pickAndPlace(const std::string& obj_name, const geometry_msgs::Pose& o
     target_pos_down2.position = goal_loc;
     target_pos_down2.position.z = 0.41;
     // clearConstraint();
-    bool move_goal_success = moveArm(target_pos_down2, false, 0, false);
+    bool move_goal_success = moveArm(target_pos_down2, true, 0, false);
     
     clearConstraint();
     

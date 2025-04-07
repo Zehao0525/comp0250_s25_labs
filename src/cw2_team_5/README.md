@@ -133,9 +133,11 @@ Our particular implementation takes a relativly safe strategy, we spent consider
 - Pointclouds are taken in stationary positions because the camera pointcloud and the TF pointcloud are Asynchronous (or rather we have no synchronisation guarentees).  If we had synchronized TF and point cloud data, we could scan the scene continuously and merge point clouds dynamically. Alternatively, we could assume synchronization, but this would introduce sensor noise, potentially compromising data accuracy. 
 
 ## Potential Errors:
-- For Task 1, The collision of the picked object is deleted from the scene. Additionally the RRT planner often plan some really crazy paths. This means there is a chance for the arm to plan a path that will cause the picked object to collide with other objects and knocking the gripped object out of the gripper. 
-- For Task 2 and 3, there is a small chance that the objects may be misclassified due to noise. This is highly unlikly and we have not encountered any such instances during our tests.
-- For Task 3, the same error for both task 1 and 2 can occure. Additionally, although the threshold for a shape to be considered a cross or nought is generouse, there is still a chance that some shape are ignored due to noise in the pointcloud scanning process. 
+Most of these problems are to do with the path planner design and enviornment noise, thus there is no real way for us to fully solve these problems without major alterations to the libraries used. These problem are quite rare, so if one of them occures, please retrying our task. 
+- For Task 1, the gripped object can collide with other parts of the scene and knocking the gripped object out of the gripper. This is because the collision of the gripped object is deleted from the scene. Additionally the RRT planner often plan some really crazy paths. 
+- Also for Task 1, Path planning from picked location (0.4 m above object) to 0.4m above goal location may fail. This is because it is a long distance, and we applied a z constraint to the planning problem to reduce the cahnce of the previouse problem occuring. You can identify this error when you see consequtive:```[ERROR] [-, -]: panda_arm/panda_arm: Unable to sample any valid states for goal tree``` before failure
+- For Task 2 and 3, there is a small chance that the objects may be ignored due to noise. This is highly unlikly and we have not encountered any such instances during our tests. 
+- For Task 3, the same error for both task 1 and 2 can occure. Additionally, although the threshold for a shape to be considered a cross or nought is generouse, there is still a chance that some shape are ignored due to noise in the pointcloud scanning process. (In 5 tests it only occured once for one object, and it did not affect the final result)
 
 ## Task Breakdown and Team Contributions
 
