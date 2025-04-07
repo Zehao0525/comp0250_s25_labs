@@ -51,7 +51,7 @@ bool cw2::moveArm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recu
       
 
       // Optimize trajectory speed
-      if(!fast){
+      if(fast){
         robot_trajectory::RobotTrajectory rt(arm_group_.getCurrentState()->getRobotModel(), "panda_arm");
         rt.setRobotTrajectoryMsg(*arm_group_.getCurrentState(), my_plan.trajectory_);
         trajectory_processing::IterativeParabolicTimeParameterization iptp;
@@ -210,7 +210,7 @@ void cw2::pickAndPlace(const std::string& obj_name, const geometry_msgs::Pose& o
     clearConstraint();
     target_pos_down = obj_loc;
     target_pos_down.position.z = 0.04 + 0.11; //estimated good grasping position
-    bool move_down_success = moveArm(target_pos_down, false, 0, false);
+    bool move_down_success = moveArm(target_pos_down, true, 0, false);
     
     removeCollisionObjects(collision_obj_parts);
     bool close_gripper_success = moveGripper(0.0);
@@ -218,7 +218,7 @@ void cw2::pickAndPlace(const std::string& obj_name, const geometry_msgs::Pose& o
     
     target_pos_up = obj_loc;
     target_pos_up.position.z = 0.41;
-    bool move_up_success = moveArm(target_pos_up, false, 0, false);
+    bool move_up_success = moveArm(target_pos_up, true, 0, false);
     
     ///////////////////////////////////////////
     // Move to goal position
@@ -240,13 +240,13 @@ void cw2::pickAndPlace(const std::string& obj_name, const geometry_msgs::Pose& o
     
     target_pos_down2.position = goal_loc;
     target_pos_down2.position.z = 0.25;
-    bool move_down_success2 = moveArm(target_pos_down2, false, 0, false);
+    bool move_down_success2 = moveArm(target_pos_down2, true, 0, false);
     
     bool open_gripper_success = moveGripper(1.0);
     
     target_pos_up2.position = goal_loc;
     target_pos_up2.position.z = 0.41;
-    bool move_up_success2 = moveArm(target_pos_up2, false);
+    bool move_up_success2 = moveArm(target_pos_up2, true);
 
     //setConstraint();
 }
@@ -414,8 +414,8 @@ void cw2::setZConstraint(double min_height, double max_height) {
   shape_msgs::SolidPrimitive box;
   box.type = shape_msgs::SolidPrimitive::BOX;
   box.dimensions.resize(3);
-  box.dimensions[0] = 2.0;  // x方向很大，不限制
-  box.dimensions[1] = 2.0;  // y方向很大，不限制
+  box.dimensions[0] = 20.0;  // x方向很大，不限制
+  box.dimensions[1] = 20.0;  // y方向很大，不限制
   box.dimensions[2] = max_height - min_height;  // z方向限制范围
   
   // Set box position
