@@ -18,6 +18,8 @@ void subtractPointCloud(
 static bool enforceColorSimilarity(const pcl::PointXYZRGBA& a, const pcl::PointXYZRGBA& b, float /*squared_dist*/) ;
 
 float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2);
+float calculateOverlap_backup(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2);
+
 void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud);
 void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
 
@@ -46,7 +48,15 @@ void processShapeCombination(
     float angle_step,
     ShapeDetectionResult& global_result);
 
+void processShapeCombination_backup(
+    const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& obj_cloud_ptr,
+    const std::string& shape_type,
+    float size,
+    float angle_step,
+    ShapeDetectionResult& global_result);
+
+
 ShapeDetectionResult detectShapeRotationMulti(
     const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& obj_cloud_ptr,
-    float angle_step = 0.5);
+    float angle_step = 2);
 #endif // end of include guard for cw2_CLASS_H_

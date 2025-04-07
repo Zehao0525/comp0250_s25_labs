@@ -441,7 +441,7 @@ cw2::t3_callback(cw2_world_spawner::Task3Service::Request &request,
   geometry_msgs::Point candidate_basket_point;
   candidate_basket_point.x = candidate_basket.centroid[0];
   candidate_basket_point.y = candidate_basket.centroid[1];
-  candidate_basket_point.z = 0.45;
+  candidate_basket_point.z = 0.045;
   addBasket("basket", candidate_basket_point);
   candidate_basket_point.z = 0.2; // Set Z height
 

@@ -254,12 +254,13 @@ public:
     bool skip_center = true,
     const std::string& output_filename = "task3_scan_result1.pcd");
 
-  // 在类定义中的其他成员函数声明旁边添加
+  
 void adjustPoseByShapeAndRotation(geometry_msgs::Pose& target_pose, 
   const std::string& shape_type, 
   float rot_degree,
   float obj_size = 0.02);
 
+  bool isPointInWorkspace(const geometry_msgs::Pose& target_pose, bool check_collisions = true);
 
 
   void clearObstacles();
@@ -267,6 +268,7 @@ void adjustPoseByShapeAndRotation(geometry_msgs::Pose& target_pose,
   std::vector<Obstacle> obstacles_;  // 全局障碍物列表
 
   bool resetArm(double min_height = 0.4, double target_height = 0.41);
+  bool clearAllConstraints();
   // void resetArm();
 private:
   void setZConstraint(double min_height = 0.4, double max_height = 1.2);

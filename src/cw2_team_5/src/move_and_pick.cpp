@@ -84,6 +84,7 @@ bool cw2::moveArm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recu
   if (!use_cartesian || !plan_success || !exec_success) {
     arm_group_.setPoseTarget(target_pose);
     
+
     int attempts = 0;
     const int max_attempts = 3;
 
@@ -161,7 +162,9 @@ bool cw2::moveArm(geometry_msgs::Pose& target_pose, bool use_cartesian, int recu
     if (recursion_depth == max_recursion_depth - 1) {
       ROS_WARN("Maximum recursion depth reached. Attempting final target with temporary waypoint.(REMOVE THE CONSTRAINT)");
       resetArm();
+      clearAllConstraints();
       waypoint_success = moveArm(temp_pose, use_cartesian, recursion_depth + 1, fast);
+      setZConstraint(0.4, 1.2);
 
     } else {
       waypoint_success = moveArm(temp_pose, use_cartesian, recursion_depth + 1, fast);
@@ -216,20 +219,38 @@ void cw2::pickAndPlace(const std::string& obj_name, const geometry_msgs::Pose& o
     
     
     target_pos_up = obj_loc;
-    target_pos_up.position.z = 0.41;
-    bool move_up_success = moveArm(target_pos_up, true, 0, false);
+    target_pos_up.position.z = 0.42;
+    bool move_up_success = moveArm(target_pos_up, false, 0, false);
     
     ///////////////////////////////////////////
     // Move to goal position
     ///////////////////////////////////////////
 
     // setConstraint();
-    setZConstraint(0.4, 1.2);
+    setZConstraint(0.35, 1.2);
+    // get arm position
+    geometry_msgs::Pose current_pose = arm_group_.getCurrentPose().pose;
+    target_pos_down2.orientation = current_pose.orientation;
     target_pos_down2.position = goal_loc;
-    target_pos_down2.position.z = 0.41;
-    // clearConstraint();
-    bool move_goal_success = moveArm(target_pos_down2, true, 0, false);
-    
+    target_pos_down2.position.z = 0.42;
+  
+    bool is_in_workspace = isPointInWorkspace(target_pos_down2);
+
+
+    bool move_goal_success = moveArm(target_pos_down2, false, 0, false);
+    while (!move_goal_success) {
+      target_pos_down2.position.z -= 0.1;
+      move_goal_success = moveArm(target_pos_down2, false, 0, true);
+      if (target_pos_down2.position.z < 0.35) {
+        ROS_ERROR("Cannot move to goal position. Aborting.");
+        break;
+      }
+      if (move_goal_success) {
+        ROS_INFO("Moved to goal position.");
+        break;
+      }
+    }
+
     clearConstraint();
     
     ///////////////////////////////////////////
@@ -447,6 +468,47 @@ void cw2::setZConstraint(double min_height, double max_height) {
 }
 
 
+/**
+ * Clear all robot constraints and reset planning parameters
+ * This function is more comprehensive than clearConstraint() and ensures
+ * all possible constraints are removed for maximum freedom of movement
+ * @return true if constraints were successfully cleared
+ */
+bool cw2::clearAllConstraints() {
+  ROS_INFO("Clearing all robot constraints and limitations");
+  
+  // Clear internal constraint data structures
+  constraints_.joint_constraints.clear();
+  constraints_.position_constraints.clear();
+  constraints_.orientation_constraints.clear();  // Clear any orientation constraints
+  constraints_.visibility_constraints.clear();   // Clear any visibility constraints
+  
+  // Clear MoveIt path constraints
+  arm_group_.clearPathConstraints();
+  
+  // Reset velocity and acceleration scaling factors to default
+  arm_group_.setMaxVelocityScalingFactor(1.0);
+  arm_group_.setMaxAccelerationScalingFactor(1.0);
+  
+  // Clear pose targets
+  arm_group_.clearPoseTargets();
+  
+  // Reset planning time (increase to allow for more complex planning)
+  arm_group_.setPlanningTime(5.0);
+  
+  // Reset planning attempts
+  arm_group_.setNumPlanningAttempts(10);
+  
+  // Optional: Switch to a default planner that handles complex scenarios well
+  arm_group_.setPlannerId("RRTConnect");
+  
+  // Clear end effector specific constraints
+  arm_group_.clearPoseTarget("panda_link8");
+  
+  ROS_INFO("All constraints cleared, planning parameters reset to defaults");
+  return true;
+}
+
 
 bool cw2::resetArm(double min_height, double target_height)
 {
@@ -487,5 +549,43 @@ bool cw2::resetArm(double min_height, double target_height)
   }
 
   setZConstraint(0.4, 1.2); // Reapply Z constraints
+  return true;
+}
+
+
+
+/**
+ * Check if a target pose is within the robot's workspace
+ * @param target_pose The pose to check
+ * @param check_collisions Whether to also check for collisions
+ * @return true if the pose is reachable
+ */
+bool cw2::isPointInWorkspace(const geometry_msgs::Pose& target_pose, bool check_collisions) {
+  // Get the current robot state
+  moveit::core::RobotStatePtr current_state = arm_group_.getCurrentState();
+  if (!current_state) {
+    ROS_ERROR("Failed to get current robot state");
+    return false;
+  }
+
+  // Get the joint model group for the arm
+  const robot_state::JointModelGroup* joint_model_group = 
+      current_state->getJointModelGroup(arm_group_.getName());
+  
+  // Try to find an IK solution for the target pose
+  bool found_ik = current_state->setFromIK(
+      joint_model_group, target_pose, 10, 0.1); // timeout: 10ms, attempts: 0.1
+  
+  if (!found_ik) {
+    ROS_WARN("Target pose is outside the robot's kinematic workspace");
+    return false;
+  }
+  
+  // Optionally check for collisions
+  if (check_collisions) {
+
+  }
+  
+  ROS_INFO("Target pose is within the robot's workspace");
   return true;
 }

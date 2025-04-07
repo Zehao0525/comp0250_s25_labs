@@ -90,7 +90,7 @@ void subtractPointCloud(
 
 
 
-float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr global_cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr global_cloud2) {
+float calculateOverlap_backup(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr global_cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr global_cloud2) {
   // Move two pointcouds to origin
   pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1(new pcl::PointCloud<pcl::PointXYZRGBA>(*global_cloud1));
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2(new pcl::PointCloud<pcl::PointXYZ>(*global_cloud2));
@@ -126,7 +126,7 @@ float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr global_cloud1, pc
   pcl::KdTreeFLANN<pcl::PointXYZ> kdtree2;
   kdtree2.setInputCloud(cloud2_xy);
 
-  float distance_threshold = 0.003; // voxel grids have size 0.002. max distance / diagnal being 0.0028. 
+  float distance_threshold = 0.006; // voxel grids have size 0.002. max distance / diagnal being 0.0028. 
   
   // Search from cloud 2 to 1
   std::vector<bool> cloud2_has_match(cloud2->points.size(), false);
@@ -186,6 +186,117 @@ float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr global_cloud1, pc
 }
 
 
+
+float calculateOverlap(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2) {
+  // 将两个点云平移到原点
+  translatePointCloudToOrigin(cloud1);
+  translatePointCloudToOrigin(cloud2);
+  
+  // 创建一个新的点云，将cloud1投影到XY平面上（Z=0）
+  pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud1_xy(new pcl::PointCloud<pcl::PointXYZRGBA>);
+  cloud1_xy->points.resize(cloud1->points.size());
+  for (size_t i = 0; i < cloud1->points.size(); ++i) {
+    cloud1_xy->points[i] = cloud1->points[i];
+    cloud1_xy->points[i].z = 0;  // 将Z坐标设为0
+  }
+  cloud1_xy->width = cloud1->width;
+  cloud1_xy->height = cloud1->height;
+  cloud1_xy->is_dense = cloud1->is_dense;
+  
+  // 创建cloud2的XY投影
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud2_xy(new pcl::PointCloud<pcl::PointXYZ>);
+  cloud2_xy->points.resize(cloud2->points.size());
+  for (size_t i = 0; i < cloud2->points.size(); ++i) {
+    cloud2_xy->points[i] = cloud2->points[i];
+    cloud2_xy->points[i].z = 0;  // 将Z坐标设为0
+  }
+  cloud2_xy->width = cloud2->width;
+  cloud2_xy->height = cloud2->height;
+  cloud2_xy->is_dense = cloud2->is_dense;
+
+  // 创建两个KD树用于双向搜索
+  pcl::KdTreeFLANN<pcl::PointXYZRGBA> kdtree1;
+  kdtree1.setInputCloud(cloud1_xy);
+  
+  pcl::KdTreeFLANN<pcl::PointXYZ> kdtree2;
+  kdtree2.setInputCloud(cloud2_xy);
+
+  float distance_threshold = 0.01; // 距离阈值，单位：米
+  
+  // 第一步：从cloud2到cloud1搜索
+  std::vector<bool> cloud2_has_match(cloud2->points.size(), false);
+  int intersection_count_2to1 = 0;
+
+  for (size_t i = 0; i < cloud2->points.size(); ++i) {
+    std::vector<int> point_idx_radius_search;
+    std::vector<float> point_radius_squared_distance;
+
+    pcl::PointXYZRGBA search_point;
+    search_point.x = cloud2->points[i].x;
+    search_point.y = cloud2->points[i].y;
+    search_point.z = 0;  // Z坐标设为0
+
+    if (kdtree1.radiusSearch(search_point, distance_threshold, point_idx_radius_search, point_radius_squared_distance) > 0) {
+      cloud2_has_match[i] = true;
+      intersection_count_2to1++;
+    }
+  }
+  
+  // 第二步：从cloud1到cloud2搜索
+  std::vector<bool> cloud1_has_match(cloud1->points.size(), false);
+  int intersection_count_1to2 = 0;
+
+  for (size_t i = 0; i < cloud1->points.size(); ++i) {
+    std::vector<int> point_idx_radius_search;
+    std::vector<float> point_radius_squared_distance;
+
+    pcl::PointXYZ search_point;
+    search_point.x = cloud1->points[i].x;
+    search_point.y = cloud1->points[i].y;
+    search_point.z = 0;  // Z坐标设为0
+
+    if (kdtree2.radiusSearch(search_point, distance_threshold, point_idx_radius_search, point_radius_squared_distance) > 0) {
+      cloud1_has_match[i] = true;
+      intersection_count_1to2++;
+    }
+  }
+  
+  // 计算精确的交集与并集
+  int cloud1_matched = std::count(cloud1_has_match.begin(), cloud1_has_match.end(), true);
+  int cloud2_matched = std::count(cloud2_has_match.begin(), cloud2_has_match.end(), true);
+  
+  // // 并集计算 = 总点数 - 匹配的点数
+  // int union_count = cloud1->points.size() + cloud2->points.size() - (cloud1_matched + cloud2_matched);
+  // // 交集计算 = 匹配的点数
+  int intersection_count = cloud1_matched + cloud2_matched;
+
+
+  // int intersection_count = cloud1_matched; // 或 cloud2_matched
+  int union_count = cloud1->points.size() + cloud2->points.size() - intersection_count;
+
+  
+  // 计算IoU(Intersection over Union)
+  float iou = static_cast<float>(intersection_count) / static_cast<float>(union_count);
+  
+  // ROS_INFO("IoU(双向): %.4f (Intersection: %d, Union: %d)", iou, intersection_count, union_count);
+  // ROS_INFO("cloud1匹配点: %d/%zu, cloud2匹配点: %d/%zu", 
+  //          cloud1_matched, cloud1->points.size(),
+  //          cloud2_matched, cloud2->points.size());
+  
+  return iou;
+}
+
+
+
+
+
+
+
+
+
+
+
+
 void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
   // Compute centroid
   Eigen::Vector4f centroid;
@@ -225,6 +336,57 @@ void translatePointCloudToOrigin(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud) 
 }
 
 
+void processShapeCombination_backup(
+  const pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& obj_cloud_ptr,
+  const std::string& shape_type,
+  float size,
+  float angle_step,
+  ShapeDetectionResult& global_result)
+{
+  // 生成参考形状点云
+  pcl::PointCloud<pcl::PointXYZ>::Ptr shape_checker_ptr;
+  if (shape_type == "cross") {
+    shape_checker_ptr = generateCrossShapePointCloud(size);
+  } else if (shape_type == "nought") {
+    shape_checker_ptr = generateOughtShapePointCloud(size);
+  }
+
+  float shape_max_overlap = 0.0;
+  float shape_best_angle = -1.0;
+
+  for (float degrees = 0; degrees < 90; degrees += angle_step) {
+    Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+    transform.rotate(Eigen::AngleAxisf(degrees * M_PI / 180, Eigen::Vector3f::UnitZ()));
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::transformPointCloud(*shape_checker_ptr, *transformed_cloud, transform);
+
+    float overlap = calculateOverlap_backup(obj_cloud_ptr, transformed_cloud);
+
+    if (overlap > shape_max_overlap) {
+      shape_max_overlap = overlap;
+      shape_best_angle = degrees;
+    }
+  }
+
+  // 计算点云的几何中心
+  Eigen::Vector4f centroid;
+  pcl::compute3DCentroid(*obj_cloud_ptr, centroid);
+
+  // 用锁保护全局最优结果的更新
+  std::lock_guard<std::mutex> lock(result_mutex);
+  if (shape_max_overlap > global_result.overlap_score) {
+    global_result.rotation_angle = shape_best_angle;
+    global_result.shape_type = shape_type;
+    global_result.size = size;
+    global_result.overlap_score = shape_max_overlap;
+    global_result.centroid = centroid;
+
+
+    ROS_INFO("New best match: type=%s, size=%.3f, angle=%.1f, overlap=%.3f", 
+             shape_type.c_str(), size, shape_best_angle, shape_max_overlap);
+  }
+}
 
 
 void processShapeCombination(
@@ -285,7 +447,7 @@ void processShapeCombination(
     pcl::transformPointCloud(*shape_checker_ptr, *transformed_cloud, transform);
 
     // Checl overlap
-    float overlap = calculateOverlap(obj_cloud_ptr_flat, transformed_cloud);
+    float overlap = calculateOverlap_backup(obj_cloud_ptr_flat, transformed_cloud);
 
     if (overlap > shape_max_overlap) {
       shape_max_overlap = overlap;
@@ -297,7 +459,7 @@ void processShapeCombination(
   // If our detection is good enough to be considered a "Hit", but not great in overlap, we do a finer search. 
   if(shape_max_overlap > 0.4 && shape_max_overlap < 0.8){
     // Iterate through finer search
-    for (float degrees_it = (shape_best_angle_rough-10); degrees_it < (shape_best_angle_rough+10.1); degrees_it += angle_step) {
+    for (float degrees_it = (shape_best_angle_rough-12); degrees_it < (shape_best_angle_rough+12); degrees_it += angle_step) {
       // Exclude 0 
       if(degrees_it < 1e-8 && degrees_it > -1e-8){
         continue;
@@ -311,7 +473,7 @@ void processShapeCombination(
       pcl::transformPointCloud(*shape_checker_ptr, *transformed_cloud, transform);
   
       // Compute overlap
-      float overlap = calculateOverlap(obj_cloud_ptr_flat, transformed_cloud);
+      float overlap = calculateOverlap_backup(obj_cloud_ptr_flat, transformed_cloud);
   
       if (overlap > shape_max_overlap) {
         shape_max_overlap = overlap;
@@ -356,7 +518,7 @@ ShapeDetectionResult detectShapeRotationMulti(
   ROS_INFO("Initializing threads for all possible shapse and sizes...");
   for (const auto& shape_type : shape_types) {
     for (const auto& size : sizes) {
-      threads.emplace_back(processShapeCombination,
+      threads.emplace_back(processShapeCombination_backup,
                            obj_cloud_ptr,
                            shape_type,
                            size,
